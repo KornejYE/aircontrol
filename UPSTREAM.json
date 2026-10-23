@@ -1,0 +1,13 @@
+{
+  "project": "MARK LV — JARVIS",
+  "author": "FatihMakes",
+  "repository": "https://github.com/FatihMakes/Mark-LV",
+  "reference": "c3e795af71bff38bb406c62a2e7a63869cdc8eb2",
+  "license": "CC-BY-NC-4.0",
+  "modifications": [
+    "Extracted local hand gesture control into an independent application",
+    "Added standalone UI and isolated preferences",
+    "Added relative hand mouse, click/drag/scroll, smoothing and dropout recovery",
+    "Added browser extension and configurable per-hand bindings"
+  ]
+}

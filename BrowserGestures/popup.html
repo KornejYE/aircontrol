@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Жесты AirControl</title>
+<link rel="stylesheet" href="popup.css">
+<main>
+ <div class="quick-controls">
+  <button class="primary" id="arm">Включить управление</button>
+  <button class="secondary" id="stop" hidden>Выключить управление</button>
+  <button class="more" id="settings-toggle" aria-label="Настройки управления" title="Настройки управления" aria-expanded="false" aria-controls="settings">⋯</button>
+ </div>
+ <p class="camera-state" id="camera-state" role="status" aria-live="polite"></p>
+ <p class="status" id="status" role="status" aria-live="polite"></p>
+ <div id="settings" hidden>
+ <header><h1>Настройки жестов</h1></header>
+ <section class="card" aria-labelledby="scope-title">
+  <label class="field-label" id="scope-title" for="scope">Где управлять</label>
+  <select id="scope">
+   <option value="browser">Весь браузер</option>
+   <option value="window">Только это окно</option>
+   <option value="tab">Только эта вкладка</option>
+  </select>
+  <p class="hint">Камера включается вместе с управлением. В браузере управляется активная вкладка последнего выбранного окна; свёрнутые окна не получают команды.</p>
+ </section>
+ <section class="card" aria-labelledby="mode-title">
+  <label class="field-label" id="mode-title" for="mode">Режим управления</label>
+  <select id="mode">
+   <option value="auto">Автоматически</option>
+   <option value="analog">Всегда аналоговое</option>
+   <option value="discrete">Всегда обычное</option>
+   <option value="mouse">Мышь рукой · браузер</option>
+   <option value="system_mouse">Мышь рукой · весь Mac</option>
+  </select>
+  <p class="hint" id="mode-help">YouTube Shorts — обычное управление. Обычные ролики YouTube и все остальные страницы — аналоговое.</p>
+  <div class="current" role="status" aria-live="polite"><span class="dot" aria-hidden="true"></span><span id="current">Проверяю текущую страницу…</span></div>
+ </section>
+ <section class="card" aria-labelledby="span-title">
+  <div class="field-row"><label class="field-label" id="span-title" for="span">Размах на одно видео</label><output id="span-value" for="span">20%</output></div>
+  <input id="span" type="range" min="12" max="60" step="1" value="20" aria-describedby="span-help" aria-valuetext="20 процентов высоты кадра">
+  <div class="range-labels" aria-hidden="true"><span>Короче</span><span>Длиннее</span></div>
+  <p class="hint" id="span-help">Два ролика — движение на 40% высоты кадра. Меньше значение — меньше размах руки.</p>
+  <p class="saved" id="saved" role="status" aria-live="polite"></p>
+ </section>
+ <section class="connection">
+  <label class="check"><input id="unfocused" type="checkbox" checked><span>Управлять, пока активна игра</span></label>
+  <p class="hint">Выбранное окно должно оставаться видимым.</p>
+
+ </section>
+ </div>
+</main>
+<script src="popup.js"></script>
+</html>

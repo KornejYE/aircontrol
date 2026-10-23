@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "AirControl • Жесты",
+  "version": "1.0.0",
+  "description": "Local hand gestures for AirControl: mouse, scrolling and browser controls.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8767/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ]
+}

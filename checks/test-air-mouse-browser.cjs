@@ -1,0 +1,17 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+let now=1000,events=[],clicks=0,scrolls=[],removed=0;
+const target={tagName:'BUTTON',dispatchEvent:e=>events.push(e.type),click:()=>clicks++,getBoundingClientRect:()=>({left:0,width:100})};
+const context={window:{scrollBy:e=>scrolls.push(e)},document:{hidden:false,hasFocus:()=>true,body:{},documentElement:{appendChild:()=>{}},createElement:()=>({style:{},isConnected:true,setAttribute(){},remove(){removed++;}}),elementFromPoint:()=>target},Date:{now:()=>now},innerWidth:1000,innerHeight:800,getComputedStyle:()=>({overflowY:'visible'}),Event:class{constructor(type,options){this.type=type;Object.assign(this,options);}},MouseEvent:class{constructor(type,options){this.type=type;Object.assign(this,options);}},HTMLInputElement:class{}};
+vm.runInNewContext(fs.readFileSync('BrowserGestures/pointer.js','utf8'),context);
+const mouse=new context.window.__AirControlBrowserAirMouse();let id=0;
+const send=(phase,extra={})=>mouse.handle({id:++id,phase,x:.4,y:.3,...extra},true);
+send('move');assert.equal(clicks,0);send('click');assert.equal(clicks,1);
+mouse.handle({id,phase:'click',x:.4,y:.3},true);assert.equal(clicks,1,'no duplicate clicks');
+send('down');assert.equal(mouse.down,target);send('move');send('cancel');assert.equal(mouse.down,null);assert.equal(events.at(-1),'mouseup');assert.equal(clicks,1,'clutch cancels drag without clicking');
+send('down');now+=400;mouse.tick();assert.equal(mouse.down,null,'watchdog releases on tracking loss');
+mouse.pause();send('click');assert.equal(clicks,1,'physical mouse priority blocks camera clicks');now+=1300;send('click');assert.equal(clicks,2);
+context.document.hidden=true;send('click');assert.equal(clicks,2);context.document.hidden=false;
+context.document.hasFocus=()=>false;mouse.handle({id:++id,phase:'click',x:.4,y:.3},false);assert.equal(clicks,2);
+mouse.handle({id:++id,phase:'click',x:.4,y:.3},true);assert.equal(clicks,3,'explicit background control works');
+mouse.destroy();assert.ok(removed>0);
+console.log('PASS browser pointer: movement, click, deduplication, drag cancellation, tracking watchdog, physical mouse priority, visibility and focus guards. Synthetic DOM only.');

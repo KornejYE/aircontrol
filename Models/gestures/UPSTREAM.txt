@@ -1,0 +1,7 @@
+MediaPipe Hand Landmarker float16 v1, Google.
+https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker
+https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task
+SHA256 fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1
+Uses MediaPipe (Apache 2.0). See https://github.com/google-ai-edge/mediapipe/blob/master/LICENSE
+Model use: see https://developers.google.com/edge/mediapipe/solutions/about
+Frames are processed locally and are not recorded.
