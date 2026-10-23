@@ -17,6 +17,7 @@ from core.room_gesture_panel import install_controller,open_panel
 from core.room_settings_shell import STYLE
 
 ROOT=Path(__file__).resolve().parents[1]
+APP_VERSION='1.1.1'
 
 class Preview(QLabel):
     def __init__(self):
@@ -41,7 +42,7 @@ class AirControlWindow(QMainWindow):
         self._quit=False;self._last_mode=None
         body=QWidget();self.setCentralWidget(body);layout=QVBoxLayout(body);layout.setContentsMargins(28,24,28,22);layout.setSpacing(18)
         header=QHBoxLayout();heading=QVBoxLayout();title=QLabel('AirControl');title.setStyleSheet('font-size:30px;font-weight:600;');heading.addWidget(title)
-        subtitle=QLabel('Управляйте компьютером движением руки');subtitle.setStyleSheet('color:#a3afb5;font-size:16px;');heading.addWidget(subtitle);header.addLayout(heading,1)
+        subtitle=QLabel('Управляйте компьютером движением руки · '+APP_VERSION);subtitle.setStyleSheet('color:#a3afb5;font-size:16px;');heading.addWidget(subtitle);header.addLayout(heading,1)
         self.start_button=QPushButton('Включить управление');self.start_button.setObjectName('SettingsDone');self.start_button.setMinimumHeight(48);self.start_button.clicked.connect(self.toggle);header.addWidget(self.start_button)
         settings=QPushButton('Настройки');settings.setMinimumHeight(48);settings.clicked.connect(self.settings);header.addWidget(settings);layout.addLayout(header)
         tools=QHBoxLayout();self.mode=QComboBox();self.mode.setAccessibleName('Режим управления');self.mode.setMinimumWidth(330)
@@ -98,7 +99,12 @@ class AirControlWindow(QMainWindow):
         self.game_tools.setVisible(current=='joystick')
         if current in ('mouse','system_mouse'):
             self.hint.setText('Кисть — курсор  ·  Большой + указательный — клик и перетаскивание  ·  Три пальца — прокрутка\nБольшой + средний — правый клик  ·  Кулак — остановка  ·  Esc — отключить мышь рукой')
-        elif current=='joystick':self.hint.setText('Большой + указательный — захват джойстика · Двигайте кисть от точки захвата\nРазожмите пальцы — остановка · Esc — отключить · По умолчанию только проверка на экране')
+        elif current=='joystick':
+            from core.room_gesture_rules import read_settings
+            game=c._game_input.config if c._game_input else read_settings(DATA_DIR/'config/gesture-actions.json')['joystick']
+            grip='Кулак на столе' if game['grip']=='fist' else 'Щипок большого и указательного'
+            motion='наклоняйте кисть как джойстик' if game['motion']=='tilt' else 'перемещайте кисть от точки захвата'
+            self.hint.setText(grip+' · Удержите 0,2 секунды, затем '+motion+'\nРаскройте руку — остановка · Esc — отключить · Хват и движение меняются в настройках джойстика')
         else:self.hint.setText('Сомкните три пальца и потяните  ·  Открытая ладонь на 1 секунду — пауза\nУголок левой рукой — громкость  ·  Для управления вкладками подключите браузер')
         if not running and not self.preview.frame.isNull():self.preview.reset()
     def receive(self,data):
@@ -123,7 +129,7 @@ class AirControlWindow(QMainWindow):
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--render-preview',type=Path);args=parser.parse_args()
     DATA_DIR.mkdir(parents=True,exist_ok=True,mode=0o700)
-    app=QApplication(sys.argv[:1]);app.setApplicationName('AirControl');app.setOrganizationName('AirControl');app.setApplicationVersion('1.1.0');app.setStyleSheet(STYLE);app.setFont(QFont('Arial',16))
+    app=QApplication(sys.argv[:1]);app.setApplicationName('AirControl');app.setOrganizationName('AirControl');app.setApplicationVersion(APP_VERSION);app.setStyleSheet(STYLE);app.setFont(QFont('Arial',16))
     lock=QLockFile(str(DATA_DIR/'aircontrol.lock'));lock.setStaleLockTime(0)
     if not lock.tryLock(100):
         QMessageBox.information(None,'AirControl','AirControl уже запущен. Откройте его из Dock или строки меню.');return 0

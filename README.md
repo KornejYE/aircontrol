@@ -82,7 +82,7 @@ System-wide mouse control works without the extension. Page control is limited b
 
 ## Game joystick (experimental)
 
-Select **«Игровой джойстик» → «Настроить джойстик»**. The default output is an on-screen preview, with no game input. Pinch thumb and index for about 0.2 seconds, with the middle finger away from the thumb, to establish neutral. Move the palm away from neutral to steer; release the pinch or remove the hand to stop. Span, deadzone, controlling hand and Y inversion are separate from pointer settings.
+Select **«Игровой джойстик» → «Настроить джойстик»**. The default output is an on-screen preview, with no game input. The default grip is a **closed fist**, with **3D tilt** steering. Rest the fist on its little-finger edge and hold upright for about 0.2 seconds to establish neutral. Tilt right/left and forward/backward as if holding a stick; opening the hand or removing it stops output. Angle sensitivity, deadzone, controlling hand and Y inversion are separate from pointer settings. The previous **pinch + palm translation** scheme remains selectable. If detection does not acquire an already-closed fist, briefly show an open hand first.
 
 For live output, select a running game and either **held WASD keys** (digital tank movement, including diagonals) or **mouse-joystick positioning** (smooth cursor displacement around the current monitor's center). For the latter, configure War Thunder's own Mouse Joystick mode, use fullscreen and leave joystick neutral at screen center. Firing is not mapped. Focus loss and a 250 ms input timeout release output; resuming requires a new grip. Esc latches output off until control is toggled. The physical mouse takes priority over mouse-joystick output.
 

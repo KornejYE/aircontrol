@@ -87,7 +87,7 @@ class GestureController(QObject):
  def camera_snapshot(self):
   process=self.process;running=process is not None and process.poll() is None
   ready=running and self.ready
-  return dict(pointer_error=self._pointer_error,mode=self.effective_mode,running=running,ready=ready,state='on' if ready else 'starting' if running else 'off',tracking=self._pointer_diagnostics,physical_pauses=getattr(self._pointer_native,'physical_pauses',0),physical_pause=bool(self._pointer_native and self._pointer_native.paused_until>time.monotonic()),performance=self.performance)
+  return dict(pointer_error=self._pointer_error,mode=self.effective_mode,running=running,ready=ready,state='on' if ready else 'starting' if running else 'off',tracking=self._pointer_diagnostics,physical_pauses=getattr(self._pointer_native,'physical_pauses',0),physical_pause=bool(self._pointer_native and self._pointer_native.paused_until>time.monotonic()),performance=self.performance,joystick={k:self.joystick_data.get(k) for k in ('x','y','active','state')},joystick_status=self.joystick_status)
  def browser_camera(self,enabled):
   request={'action':'browser_on' if enabled else 'browser_off','done':threading.Event()}
   self.request_signal.emit(request)

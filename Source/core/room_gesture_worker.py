@@ -1,5 +1,6 @@
 """Optional isolated camera worker; bounded latest-frame input and JSON IPC."""
 import argparse,base64,json,sys,time,os,threading,queue,math
+from types import SimpleNamespace
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from core.room_gesture_engine import GestureEngine,calibrated_profile
@@ -33,6 +34,13 @@ def runtime_settings(saved,overlay):
 def runtime_distance(saved,overlay):
  value=overlay['distance'] if overlay and overlay.get('distance') is not None else saved
  return max(.04,min(.20,value)) if type(value) in (int,float) and math.isfinite(value) else .085
+
+
+def with_world_points(landmarks,world):
+ """Keep image points unchanged for existing gestures; attach local 3D geometry."""
+ if world is None or len(world)!=21:return landmarks
+ return [SimpleNamespace(x=p.x,y=p.y,z=getattr(p,'z',0.),world=(w.x,w.y,w.z))
+         for p,w in zip(landmarks,world)]
 
 
 def emit(kind,**data):
@@ -127,7 +135,8 @@ def main():
     stamp=max(last_stamp+1,int((captured-started)*1000));last_stamp=stamp
     result=detector.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB,data=rgb),stamp)
     detect_end=time.monotonic()
-    detections=[(landmarks,result.handedness[index][0].category_name,result.handedness[index][0].score)
+    worlds=getattr(result,'hand_world_landmarks',[]) or []
+    detections=[(with_world_points(landmarks,worlds[index] if index<len(worlds) else None),result.handedness[index][0].category_name,result.handedness[index][0].score)
                 for index,landmarks in enumerate(result.hand_landmarks) if index<len(result.handedness) and result.handedness[index]]
     tracked=tracks.update(detections,captured)
     for side in tracks.changed:router.reset_hand(side)
@@ -170,6 +179,10 @@ def main():
       source_side=router.config['mouse_hand']
       if router.config['swap_hands']:source_side='Left' if source_side=='Right' else 'Right'
       tracks.lock_side(source_side)
+    elif router.config['mode']=='joystick' and router.joystick.center is not None:
+     source_side=router.config['joystick']['hand']
+     if router.config['swap_hands']:source_side='Left' if source_side=='Right' else 'Right'
+     tracks.lock_side(source_side)
     else:tracks.clear_locks()
     if feedbacks and calibration is None:
      # Show the hand doing a gesture, not whichever detection happened to be last.

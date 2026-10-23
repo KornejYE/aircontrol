@@ -152,9 +152,10 @@ class HandRules:
   if self.config['mode']=='joystick':
    if hand!=self.config['joystick']['hand']:return None
    packet=(self.joystick.update(landmarks,now,self.config['joystick']) if allow_actions else self.joystick.cancel('lost'))
-   labels={'idle':'Сомкните большой и указательный пальцы',
+   fist=self.config['joystick']['grip']=='fist'
+   labels={'idle':'Сожмите кулак и держите прямо 0,2 секунды' if fist else 'Сомкните большой и указательный пальцы',
            'arming':'Удерживайте захват · задаю нейтраль',
-           'active':'Джойстик: двигайте кисть; разожмите пальцы для остановки',
+           'active':('Кулак: наклоняйте кисть как джойстик; раскройте ладонь для остановки' if self.config['joystick']['motion']=='tilt' else 'Джойстик: двигайте кисть; разожмите пальцы для остановки'),
            'lost':'Рука не видна · ввод отпущен'}
    self.feedback=dict(side='Правая' if hand=='Right' else 'Левая',grip=packet['active'],phase=labels[self.joystick.state])
    return [(hand,'joystick',packet)]

@@ -37,8 +37,8 @@ class StickMeter(QWidget):
         p.drawText(QRectF(162, 16, max(0, self.width()-172), self.height()-20),
                    Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextWordWrap,
                    f'X {x:+.2f}    Y {y:+.2f}\n' + (self.controller.joystick_status or
-                   ('Сомкните пальцы для нового захвата' if self.controller.ready else 'Включите камеру · ввод в игру не выполняется')) +
-                   ('\nЗахват активен' if active else '\nРазожмите пальцы · новый захват задаёт нейтраль'))
+                   ('Покажите выбранный хват' if self.controller.ready else 'Включите камеру · ввод в игру не выполняется')) +
+                   ('\nХват активен' if active else '\nРаскройте руку · следующий хват задаст нейтраль'))
 
 
 def install_game_settings(panel):
@@ -51,9 +51,9 @@ def install_game_settings(panel):
     config = read_settings(path)['joystick']
     workspace.add_page('games', 'Игровой джойстик', 'Ручное управление кистью. Не является виртуальным геймпадом.')
     frame, box = card('Джойстик рукой',
-        'Сведите большой и указательный пальцы, удержите 0,2 секунды и двигайте кисть. '
-        'Точка захвата становится нейтралью. Разожмите пальцы или уберите руку — ввод отпускается. '
-        'Кулак не включает джойстик. Esc останавливает до повторного включения управления.')
+        'По умолчанию: поставьте кулак ребром на стол, подержите прямо 0,2 секунды и наклоняйте '
+        'вправо, влево, вперёд и назад, как ручку джойстика. Раскройте ладонь или уберите руку для остановки. '
+        'Esc останавливает до повторного включения управления. Щипок и перемещение всей кисти доступны ниже.')
     workspace.add('games', frame)
     box.addWidget(StickMeter(panel.controller))
     mode = QPushButton('Выбрать режим «Игровой джойстик»')
@@ -120,6 +120,12 @@ def install_game_settings(panel):
     hand.addItem('Левая рука', 'Left')
     hand.setCurrentIndex(hand.findData(config['hand']))
     tune.addWidget(hand)
+    grip = QComboBox();grip.setAccessibleName('Хват игрового джойстика')
+    grip.addItem('Кулак · как ручка джойстика','fist');grip.addItem('Щипок большого и указательного','pinch')
+    grip.setCurrentIndex(grip.findData(config['grip']));tune.addWidget(grip)
+    motion = QComboBox();motion.setAccessibleName('Движение игрового джойстика')
+    motion.addItem('Наклон кисти · можно опираться на стол','tilt');motion.addItem('Перемещение всей кисти','translate')
+    motion.setCurrentIndex(motion.findData(config['motion']));tune.addWidget(motion)
 
     def slider(title, low, high, initial, label):
         caption = QLabel()
@@ -133,11 +139,15 @@ def install_game_settings(panel):
         tune.addWidget(control)
         return control
     radius = slider('Размах до полного отклонения', 60, 300, round(config['radius']*100), lambda v: f'{v/100:g} ширины ладони')
+    tilt = slider('Наклон до полного отклонения', 10, 60, round(config['tilt_degrees']), lambda v: f'{v}°')
     deadzone = slider('Мёртвая зона', 5, 40, round(config['deadzone']*100), lambda v: f'{v}%')
     mouse_range = slider('Радиус мыши-джойстика', 10, 45, round(config['mouse_range']*100), lambda v: f'{v}% короткой стороны экрана')
     invert = QCheckBox('Инвертировать вертикальную ось')
     invert.setChecked(config['invert_y'])
     tune.addWidget(invert)
+    def motion_controls():
+        radius.setEnabled(motion.currentData()=='translate');tilt.setEnabled(motion.currentData()=='tilt')
+    motion.currentIndexChanged.connect(motion_controls);motion_controls()
 
     syncing = False
     def save():
@@ -145,14 +155,15 @@ def install_game_settings(panel):
         current = read_settings(path)
         current['joystick'] = dict(output=output.currentData(), target=target.currentData() or '',
                                   hand=hand.currentData(), radius=radius.value()/100,
+                                  grip=grip.currentData(),motion=motion.currentData(),tilt_degrees=tilt.value(),
                                   deadzone=deadzone.value()/100, mouse_range=mouse_range.value()/100,
                                   invert_y=invert.isChecked())
         save_settings(path, current)
         panel.bindings = read_settings(path)
         panel.controller.reload_rules()
-    for combo in (output, target, hand):
+    for combo in (output, target, hand, grip, motion):
         combo.currentIndexChanged.connect(save)
-    for control in (radius, deadzone, mouse_range):
+    for control in (radius, deadzone, mouse_range, tilt):
         control.valueChanged.connect(save)
     invert.toggled.connect(save)
 
@@ -160,6 +171,9 @@ def install_game_settings(panel):
         ('Вывод джойстика', 'war thunder вар тандер танки самолёты wasd игра клавиатура', output),
         ('Выбрать игру', 'war thunder вар тандер передний план фокус', target),
         ('Рука джойстика', 'правая левая', hand),
+        ('Хват джойстика', 'кулак ребро стол щипок', grip),
+        ('Движение джойстика', 'наклон поворот перемещение кисти', motion),
+        ('Угол наклона джойстика', 'чувствительность градусы', tilt),
         ('Размах джойстика', 'чувствительность радиус', radius),
         ('Мёртвая зона джойстика', 'дрожание нейтраль', deadzone),
         ('Инверсия джойстика', 'ось вверх вниз', invert),
@@ -169,15 +183,17 @@ def install_game_settings(panel):
     panel.game_target = target
     panel.game_radius = radius
     panel.game_hand = hand
+    panel.game_grip = grip;panel.game_motion = motion
     def sync():
         nonlocal syncing
         syncing = True
         try:
             saved = read_settings(path)['joystick']
             if target.findData(saved['target'])<0:target.addItem(saved['target'],saved['target'])
-            for control, value in ((output,saved['output']),(target,saved['target']),(hand,saved['hand'])):
+            for control, value in ((output,saved['output']),(target,saved['target']),(hand,saved['hand']),(grip,saved['grip']),(motion,saved['motion'])):
                 control.setCurrentIndex(control.findData(value))
             radius.setValue(round(saved['radius']*100));deadzone.setValue(round(saved['deadzone']*100))
             mouse_range.setValue(round(saved['mouse_range']*100));invert.setChecked(saved['invert_y'])
+            tilt.setValue(round(saved['tilt_degrees']))
         finally:syncing = False
     panel.sync_game_settings = sync

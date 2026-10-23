@@ -9,6 +9,13 @@ from core.room_hand_joystick import HandJoystick, game_settings, valid_stick
 from core.room_game_input import GameInput
 from core.room_gesture_rules import HandRules, settings
 from core.room_gesture_worker import runtime_settings
+from core.room_gesture_worker import with_world_points
+from types import SimpleNamespace as S
+
+
+class PinchStick(HandJoystick):
+    def update(self, points, now, config=None):
+        return super().update(points,now,dict(grip='pinch',motion='translate',**(config or {})))
 
 
 def hand(dx=0., dy=0., *, pinch=True):
@@ -25,7 +32,7 @@ def packet(x=0., y=0., active=True):
 
 class Geometry(unittest.TestCase):
     def setUp(self):
-        self.s = HandJoystick()
+        self.s = PinchStick()
 
     def engage(self):
         self.assertFalse(self.s.update(hand(), 1.)['active'])
@@ -79,6 +86,68 @@ class Geometry(unittest.TestCase):
         s.update(hand(), 1.2, 'Right');s.reset_hand('Right')
         self.assertFalse(s.take_pending()[0][2]['active'])
         self.assertEqual(runtime_settings({'mode': 'joystick'}, {'mode': 'mouse', 'span': .2})['mode'], 'joystick')
+
+
+def fist(roll=0., pitch=0., *, opened=False, offset=(0.,0.), world=True):
+    p = [[.5,.7,0.]]*21
+    p[1:5] = [[.45,.66,0.],[.43,.63,-.01],[.43,.6,-.02],[.46,.59,-.04]]
+    for base,x,y in ((5,.45,.55),(9,.49,.53),(13,.53,.55),(17,.57,.58)):
+        p[base]=[x,y,0.]
+        if opened:
+            p[base+1]=[x,y-.07,0.];p[base+2]=[x,y-.11,0.];p[base+3]=[x,y-.15,0.]
+        else:
+            p[base+1]=[x,y-.07,-.01];p[base+2]=[x,y-.05,-.045];p[base+3]=[x,y+.01,-.04]
+    result=[]
+    for x,y,z in p:
+        x,y,z=(x-.5)*16/9,y-.63,z*16/9
+        # Rotate around a stationary tabletop pivot, not around the fingertips.
+        x,y=x*math.cos(roll)-y*math.sin(roll),x*math.sin(roll)+y*math.cos(roll)
+        y,z=y*math.cos(pitch)-z*math.sin(pitch),y*math.sin(pitch)+z*math.cos(pitch)
+        point=S(x=x*9/16+.5+offset[0],y=y+.63+offset[1],z=z*9/16)
+        if world:point.world=(x,y,z)
+        result.append(point)
+    return result
+
+
+class FistTilt(unittest.TestCase):
+    def engage(self,s):
+        self.assertFalse(s.update(fist(),1.)['active'])
+        self.assertTrue(s.update(fist(),1.2)['active'])
+    def test_closed_fist_engages_and_open_palm_stops(self):
+        s=HandJoystick();self.engage(s)
+        moved=s.update(fist(roll=.3),1.23)
+        self.assertGreater(moved['x'],.05)
+        self.assertFalse(s.update(fist(opened=True),1.26)['active'])
+        self.assertIsNone(s.basis)
+    def test_tilt_axes_work_with_a_stationary_pivot_and_ignore_translation(self):
+        for roll,pitch,axis,sign in ((.35,0,'x',1),(-.35,0,'x',-1),(0,.35,'y',-1),(0,-.35,'y',1)):
+            s=HandJoystick();self.engage(s)
+            for i in range(10):out=s.update(fist(roll,pitch),1.23+i*.03)
+            self.assertGreater(out[axis]*sign,.15,(roll,pitch,out))
+        s=HandJoystick();self.engage(s)
+        for i in range(8):out=s.update(fist(offset=(.15,.1)),1.23+i*.03)
+        self.assertEqual((out['x'],out['y']),(0,0))
+    def test_normalized_depth_fallback_and_world_source_changes_recenter(self):
+        s=HandJoystick();self.engage(s)
+        out=s.update(fist(roll=.4,world=False),1.23)
+        self.assertFalse(out['active'])
+        out=s.update(fist(roll=.4,world=False),1.44)
+        self.assertTrue(out['active']);self.assertEqual(out['x'],0)
+        for i in range(8):out=s.update(fist(roll=.65,world=False),1.47+i*.03)
+        self.assertGreater(out['x'],.1)
+    def test_tilt_sensitivity_and_inversion_do_not_require_moving_whole_hand(self):
+        values=[]
+        for degrees in (15,45):
+            s=HandJoystick();self.engage(s)
+            for i in range(10):out=s.update(fist(roll=.2,pitch=.2),1.23+i*.03,{'tilt_degrees':degrees,'invert_y':True})
+            self.assertGreater(out['y'],0);values.append(out['x'])
+        self.assertGreater(values[0],values[1]*2)
+    def test_world_attachment_preserves_existing_gesture_coordinates(self):
+        raw=fist(world=False);geometry=fist()
+        attached=with_world_points(raw,[S(x=p.world[0],y=p.world[1],z=p.world[2]) for p in geometry])
+        self.assertEqual([(p.x,p.y,p.z) for p in attached],[(p.x,p.y,p.z) for p in raw])
+        self.assertEqual([p.world for p in attached],[p.world for p in geometry])
+        self.assertIs(with_world_points(raw,None),raw)
 
 
 class FakeAPI:
