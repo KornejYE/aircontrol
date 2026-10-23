@@ -24,7 +24,7 @@ def browser_runtime_config(data):
 def runtime_settings(saved,overlay):
  """Overlay only browser timing/mode; never write or replace saved bindings."""
  config=dict(saved)
- if overlay:
+ if overlay and saved.get('mode')!='joystick':
   config['mode']=overlay['mode']
   if overlay['span'] is not None:config['analog_span']=overlay['span']
  return config
@@ -195,9 +195,9 @@ def main():
        for hand_engine in router.engines.values():hand_engine.require_media_release()
     for side,gesture,action in actions:
      payload=action if isinstance(action,dict) else {'action':action}
-     drag=payload.get('action')=='drag_scroll';pointer=payload.get('action')=='pointer'
+     drag=payload.get('action')=='drag_scroll';pointer=payload.get('action')=='pointer';joystick=payload.get('action')=='joystick'
      if calibration is not None and not (drag and payload.get('phase') in ('end','cancel')):continue
-     media_sequence+=1;emit('pointer' if pointer else 'drag_scroll' if drag else 'action',**payload,id=media_sequence,hand=side,gesture=gesture,mode=router.config['mode'],profile_revision=runtime_revision,captured_monotonic=detect_end if drag and payload.get('phase')=='cancel' else captured)
+     media_sequence+=1;emit('joystick' if joystick else 'pointer' if pointer else 'drag_scroll' if drag else 'action',**payload,id=media_sequence,hand=side,gesture=gesture,mode=router.config['mode'],profile_revision=runtime_revision,captured_monotonic=detect_end if drag and payload.get('phase')=='cancel' else captured)
     preview_start=time.monotonic()
     if cycle>=next_preview:
      # Keep a clock phase instead of restarting the interval on every frame.

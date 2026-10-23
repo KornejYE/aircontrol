@@ -23,13 +23,15 @@ def install(panel):
     workspace=SettingsWorkspace(panel,'Найти: скорость, ускорение, размах, левая рука…');panel.settings_workspace=workspace;root.addWidget(workspace,1)
     sections=[('overview','Начало','Режим управления и быстрые переходы.'),('mouse','Мышь и курсор','Чувствительность, управляющая рука и ускорение.'),('scroll','Прокрутка','Размах, воспроизведение и управление браузером.'),('bindings','Назначения','Любое действие для правой и левой руки.'),('camera','Камера','Изображение, выбор устройства и распознавание.'),('guide','Как пользоваться','Текстовые инструкции для всех жестов.')]
     for key,title,description in sections:workspace.add_page(key,title,description)
+    from core.room_joystick_panel import install_game_settings
+    install_game_settings(panel)
     destinations={'Режим управления':'overview','Мышь рукой':'mouse','Назначения жестов':'bindings','Камера':'camera','Пауза и воспроизведение':'scroll','Захватите и потяните':'scroll','Подстройте под себя':'scroll','Подключите страницу':'scroll'}
     for title,frame in panel._settings_cards.items():
         frame.setObjectName('SettingsCard');workspace.add(destinations[title],frame)
     # Move the existing guide out of its old tab before that hidden tab is reused.
     old_pages=panel.pages;old_pages.removeTab(old_pages.indexOf(panel.guide));workspace.add('guide',panel.guide)
     quick,box=card('Что настроить?','Частые параметры — в одном переходе.')
-    for label,description,key in [('Мышь и курсор','Скорость, ускорение и выбор руки','mouse'),('Прокрутка','Размах свайпа и управление видео','scroll'),('Камера','Превью и выбор камеры','camera'),('Назначения','Что выполняет каждый жест','bindings')]:
+    for label,description,key in [('Мышь и курсор','Скорость, ускорение и выбор руки','mouse'),('Прокрутка','Размах свайпа и управление видео','scroll'),('Игровой джойстик','War Thunder, WASD и мышь-джойстик','games'),('Камера','Превью и выбор камеры','camera'),('Назначения','Что выполняет каждый жест','bindings')]:
         row=QPushButton(label+'  →');row.setToolTip(description);row.clicked.connect(lambda checked=False,k=key:workspace.select(k));box.addWidget(row)
     workspace.add('overview',quick)
     for key,title,description in sections:workspace.register(title,key,description)

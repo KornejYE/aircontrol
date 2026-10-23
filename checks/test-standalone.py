@@ -41,7 +41,7 @@ class Standalone(unittest.TestCase):
   self.assertIn('Включить',window.start_button.text())
  def test_searchable_settings_have_gestures_only(self):
   window=self.window();view=window.settings('mouse')
-  self.assertEqual(set(view.settings_workspace.sections),{'overview','mouse','scroll','bindings','camera','guide'})
+  self.assertEqual(set(view.settings_workspace.sections),{'overview','mouse','scroll','bindings','camera','guide','games'})
   self.assertFalse(hasattr(view,'person_mode_box'))
   view.mouse_acceleration.setChecked(True)
   saved=json.loads((self.root/'config/gesture-actions.json').read_text())

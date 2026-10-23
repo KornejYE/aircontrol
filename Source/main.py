@@ -45,16 +45,20 @@ class AirControlWindow(QMainWindow):
         self.start_button=QPushButton('Включить управление');self.start_button.setObjectName('SettingsDone');self.start_button.setMinimumHeight(48);self.start_button.clicked.connect(self.toggle);header.addWidget(self.start_button)
         settings=QPushButton('Настройки');settings.setMinimumHeight(48);settings.clicked.connect(self.settings);header.addWidget(settings);layout.addLayout(header)
         tools=QHBoxLayout();self.mode=QComboBox();self.mode.setAccessibleName('Режим управления');self.mode.setMinimumWidth(330)
-        for text,mode in [('Мышь рукой · весь Mac','system_mouse'),('Обычные жесты','discrete'),('Аналоговая прокрутка','analog'),('Мышь рукой · браузер','mouse')]:self.mode.addItem(text,mode)
+        for text,mode in [('Мышь рукой · весь Mac','system_mouse'),('Обычные жесты','discrete'),('Аналоговая прокрутка','analog'),('Мышь рукой · браузер','mouse'),('Игровой джойстик','joystick')]:self.mode.addItem(text,mode)
         self.mode.currentIndexChanged.connect(self.change_mode);tools.addWidget(self.mode)
         self.fps=QLabel('Камера выключена');self.fps.setStyleSheet('color:#a3afb5;font-size:15px;');tools.addWidget(self.fps,1,Qt.AlignmentFlag.AlignRight);layout.addLayout(tools)
-        self.preview=Preview();layout.addWidget(self.preview,1)
+        self.preview=Preview();preview_row=QHBoxLayout();preview_row.setSpacing(18);preview_row.addWidget(self.preview,1);layout.addLayout(preview_row,1)
+        from core.room_joystick_panel import StickMeter
         self.state=QLabel('Готово к работе');self.state.setWordWrap(True);self.state.setAccessibleName('Состояние распознавания');self.state.setStyleSheet('font-size:17px;color:#c7d3d6;');layout.addWidget(self.state)
         self.hint=QLabel();self.hint.setWordWrap(True);self.hint.setStyleSheet('font-size:15px;color:#a3afb5;');layout.addWidget(self.hint)
         footer=QHBoxLayout();self.background=QCheckBox('Продолжать после закрытия окна');self.background.setChecked(False);footer.addWidget(self.background);footer.addStretch()
         browser=QPushButton('Подключить браузер');browser.clicked.connect(self.connect_browser);footer.addWidget(browser)
         help_button=QPushButton('Как пользоваться');help_button.clicked.connect(lambda:self.settings('guide'));footer.addWidget(help_button);layout.addLayout(footer)
         install_controller(self);self.controller=self._gesture_controller;self.controller.message.connect(self.receive)
+        self.game_tools=QFrame();self.game_tools.setFixedWidth(330);game_column=QVBoxLayout(self.game_tools);game_column.setContentsMargins(0,0,0,0)
+        self.stick=StickMeter(self.controller);self.stick.setMinimumHeight(240);game_column.addWidget(self.stick,1)
+        self.game_settings=QPushButton('Настроить джойстик');self.game_settings.clicked.connect(lambda:self.settings('games'));game_column.addWidget(self.game_settings);preview_row.addWidget(self.game_tools)
         self.refresh_timer=QTimer(self);self.refresh_timer.setInterval(200);self.refresh_timer.timeout.connect(self.refresh);self.refresh_timer.start()
         self.create_tray();self.refresh()
         shortcut=QAction('Настройки',self);shortcut.setShortcut(QKeySequence.StandardKey.Preferences);shortcut.triggered.connect(self.settings);self.addAction(shortcut)
@@ -91,8 +95,10 @@ class AirControlWindow(QMainWindow):
         self.fps.setText(c.performance or ('Камера запускается…' if running else 'Камера выключена'))
         self.state.setText(c._pointer_error or c.status)
         current=c.effective_mode
+        self.game_tools.setVisible(current=='joystick')
         if current in ('mouse','system_mouse'):
             self.hint.setText('Кисть — курсор  ·  Большой + указательный — клик и перетаскивание  ·  Три пальца — прокрутка\nБольшой + средний — правый клик  ·  Кулак — остановка  ·  Esc — отключить мышь рукой')
+        elif current=='joystick':self.hint.setText('Большой + указательный — захват джойстика · Двигайте кисть от точки захвата\nРазожмите пальцы — остановка · Esc — отключить · По умолчанию только проверка на экране')
         else:self.hint.setText('Сомкните три пальца и потяните  ·  Открытая ладонь на 1 секунду — пауза\nУголок левой рукой — громкость  ·  Для управления вкладками подключите браузер')
         if not running and not self.preview.frame.isNull():self.preview.reset()
     def receive(self,data):
@@ -117,7 +123,7 @@ class AirControlWindow(QMainWindow):
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--render-preview',type=Path);args=parser.parse_args()
     DATA_DIR.mkdir(parents=True,exist_ok=True,mode=0o700)
-    app=QApplication(sys.argv[:1]);app.setApplicationName('AirControl');app.setOrganizationName('AirControl');app.setApplicationVersion('1.0.0');app.setStyleSheet(STYLE);app.setFont(QFont('Arial',16))
+    app=QApplication(sys.argv[:1]);app.setApplicationName('AirControl');app.setOrganizationName('AirControl');app.setApplicationVersion('1.1.0');app.setStyleSheet(STYLE);app.setFont(QFont('Arial',16))
     lock=QLockFile(str(DATA_DIR/'aircontrol.lock'));lock.setStaleLockTime(0)
     if not lock.tryLock(100):
         QMessageBox.information(None,'AirControl','AirControl уже запущен. Откройте его из Dock или строки меню.');return 0

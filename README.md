@@ -18,6 +18,7 @@ AirControl is a standalone desktop application with local hand tracking, configu
 - **Per-hand configuration:** separate left/right bindings, movement span, cursor speed and optional acceleration.
 - **Visible tracking:** 21 landmarks per detected hand and a palm center. Up to eight hands can be displayed; the largest right and left hands control gestures.
 - **Searchable settings**, a text gesture reference and optional background operation from the menu bar.
+- **Experimental hand joystick:** a local axis preview, held WASD keys or smooth mouse-joystick positioning on macOS.
 
 ## Status
 
@@ -78,6 +79,14 @@ The optional [Chrome/Edge extension](BrowserGestures/README.md) controls a selec
 With automatic mode, YouTube Shorts use discrete gestures; other pages use analog control. Browser extension settings are behind **⋯**. The extension talks only to the local app at `127.0.0.1:8767`.
 
 System-wide mouse control works without the extension. Page control is limited by browser APIs; cross-origin frames, browser chrome and some custom widgets may require system mouse mode.
+
+## Game joystick (experimental)
+
+Select **«Игровой джойстик» → «Настроить джойстик»**. The default output is an on-screen preview, with no game input. Pinch thumb and index for about 0.2 seconds, with the middle finger away from the thumb, to establish neutral. Move the palm away from neutral to steer; release the pinch or remove the hand to stop. Span, deadzone, controlling hand and Y inversion are separate from pointer settings.
+
+For live output, select a running game and either **held WASD keys** (digital tank movement, including diagonals) or **mouse-joystick positioning** (smooth cursor displacement around the current monitor's center). For the latter, configure War Thunder's own Mouse Joystick mode, use fullscreen and leave joystick neutral at screen center. Firing is not mapped. Focus loss and a 250 ms input timeout release output; resuming requires a new grip. Esc latches output off until control is toggled. The physical mouse takes priority over mouse-joystick output.
+
+This is ordinary keyboard/mouse input, **not an analog HID gamepad**. No virtual driver, process hooks or game-memory access are used. Live War Thunder and anti-cheat compatibility have **not** been confirmed. [Gaijin prohibits gameplay automation and unfair-advantage tools](https://legal.gaijin.net/codeofconduct); this project cannot guarantee account safety or claim publisher approval. Ask game support about this specific application and do not bypass anti-cheat restrictions.
 
 ## Privacy and local data
 

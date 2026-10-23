@@ -29,6 +29,8 @@ Runtime/bin/python checks/test-worker.py
 Runtime/bin/python checks/test-analog-gestures.py
 Runtime/bin/python checks/test-stepped-wrist-gestures.py
 Runtime/bin/python checks/test-gesture-browser-profile.py
+Runtime/bin/python checks/test-hand-joystick.py
+Runtime/bin/python checks/test-joystick-controller.py
 node checks/test-air-mouse-browser.cjs
 ```
 
@@ -37,3 +39,5 @@ Real camera performance still needs manual evaluation. Report lighting, camera a
 Preserve immediate cancellation on fist, tracking loss during drag, manual disable and Esc. Cursor smoothing must not replay stale commands or predict motion after the hand disappears. Keep private settings and recordings out of commits.
 
 Changes must preserve the application's non-commercial license and third-party attribution. See [NOTICE.md](NOTICE.md).
+
+Game-stick output must remain preview-only by default. Never send test WASD presses to a real foreground game during automated checks. Test held-key release, focus changes, mode/configuration changes, stale captures and Esc with fakes. Do not add anti-cheat bypasses, game-process access, automatic firing or unattended gameplay.

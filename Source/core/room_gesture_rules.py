@@ -21,13 +21,15 @@ DEFAULTS = {'Right':{'zoom_spread':'zoom_in','zoom_close':'zoom_out',**{'grab_'+
  'Left':{**{'grab_'+d:d for d in ('up','down','left','right')},'palm_hold':'play_pause','corner_up':'volume_up','corner_down':'volume_down'}}
 
 def settings(value=None):
+ from core.room_hand_joystick import game_settings
  value=value if isinstance(value,dict) else {}
  rules=value.get('rules',{})
  speed=value.get('analog_speed',1.)
  if type(speed) not in (int,float) or not math.isfinite(speed):speed=1.
  span=value.get('analog_span',.20)
  if type(span) not in (int,float) or not math.isfinite(span):span=.20
- return {'mode':value.get('mode') if value.get('mode') in ('analog','mouse','system_mouse') else 'discrete',
+ return {'mode':value.get('mode') if value.get('mode') in ('analog','mouse','system_mouse','joystick') else 'discrete',
+  'joystick':game_settings(value.get('joystick',{'hand':value.get('mouse_hand')})),
   'mouse_return_mode':'analog' if value.get('mouse_return_mode')=='analog' else 'discrete',
   'mouse_position':'absolute' if value.get('mouse_position')=='absolute' else 'relative',
   'mouse_acceleration':value.get('mouse_acceleration') is True,
@@ -94,7 +96,9 @@ def poses(p):
 class HandRules:
  def __init__(self,distance=.085,profile=None):
   from core.room_air_mouse import AirMouse
+  from core.room_hand_joystick import HandJoystick
   self.mouse=AirMouse()
+  self.joystick=HandJoystick()
   self.config=settings();self.engines={h:GestureEngine(distance=distance,profile=profile,relative_floor=0.) for h in ('Right','Left')}
   self.zoom={h:PinchZoom() for h in self.engines};self.states={h:{} for h in self.engines};self.feedback={};self.last_hand=''
   self.analog={h:AnalogDrag(distance=distance) for h in self.engines}
@@ -119,6 +123,8 @@ class HandRules:
   updated=settings(value)
   if updated==self.config:return
   for packet in self.mouse.cancel():self._pending.append((self.config['mouse_hand'],'pointer',packet))
+  if self.config['mode']=='joystick':self._pending.append((self.config['joystick']['hand'],'joystick',self.joystick.cancel()))
+  else:self.joystick.reset()
   for hand in self.engines:self._pending.extend(self._finish_scroll(hand))
   self.config=updated
   for z in self.zoom.values():z.reset()
@@ -132,6 +138,8 @@ class HandRules:
   self._pending.extend(self._finish_scroll(hand))
   if hand==self.config['mouse_hand']:
    for packet in self.mouse.cancel():self._pending.append((hand,'pointer',packet))
+  if self.config['mode']=='joystick' and hand==self.config['joystick']['hand']:
+   self._pending.append((hand,'joystick',self.joystick.cancel('lost')))
   previous=self.engines[hand]
   self.engines[hand]=GestureEngine(hold=previous.hold,distance=previous.distance,
                                  cooldown=previous.cooldown,profile=previous.profile,relative_floor=previous.relative_floor)
@@ -141,6 +149,15 @@ class HandRules:
  def update(self,landmarks,now,hand,allow_actions=True):
   if hand not in self.engines:return None
   if self.config['swap_hands']:hand='Left' if hand=='Right' else 'Right'
+  if self.config['mode']=='joystick':
+   if hand!=self.config['joystick']['hand']:return None
+   packet=(self.joystick.update(landmarks,now,self.config['joystick']) if allow_actions else self.joystick.cancel('lost'))
+   labels={'idle':'Сомкните большой и указательный пальцы',
+           'arming':'Удерживайте захват · задаю нейтраль',
+           'active':'Джойстик: двигайте кисть; разожмите пальцы для остановки',
+           'lost':'Рука не видна · ввод отпущен'}
+   self.feedback=dict(side='Правая' if hand=='Right' else 'Левая',grip=packet['active'],phase=labels[self.joystick.state])
+   return [(hand,'joystick',packet)]
   if self.config['mode'] in ('mouse','system_mouse'):
    if hand!=self.config['mouse_hand']:return None
    hard_cancel=not allow_actions

@@ -24,9 +24,24 @@ class GestureController(QObject):
   self._pointer_timer=QTimer(self);self._pointer_timer.setInterval(16);self._pointer_timer.setTimerType(Qt.TimerType.PreciseTimer);self._pointer_timer.timeout.connect(self.tick_pointer)
   self._browser_mode=None;self._browser_revision=0;self._worker_profile_ready=True
   self._camera_lease=None
+  self._game_input=None;self._game_id=0;self._game_after=time.monotonic();self.joystick_data={};self.joystick_status=''
   self._browser_timer=QTimer(self);self._browser_timer.setInterval(50);self._browser_timer.timeout.connect(self.poll_browser_profile);self._browser_timer.start()
  @property
- def effective_mode(self):return self._browser_mode or self.control_mode
+ def effective_mode(self):return 'joystick' if self.control_mode=='joystick' else self._browser_mode or self.control_mode
+ def release_game(self):
+  self._game_after=time.monotonic();self.joystick_data={}
+  if self._game_input:
+   try:self._game_input.cancel()
+   except Exception as error:self.joystick_status=str(error)
+   if not self._game_input.held:self._game_input=None
+ def poll_game(self):
+  if self.joystick_data and not 0<=time.monotonic()-self.joystick_data.get('captured_monotonic',0)<=.25:self.joystick_data={}
+  if not self._game_input:return
+  try:
+   if self.effective_mode!='joystick' or not self.ready or self.process is None or self._calibrating:self._game_input.cancel()
+   else:self._game_input.poll()
+   self.joystick_status=self._game_input.status
+  except Exception as error:self.joystick_status=str(error)
  def release_pointer(self):
   if getattr(self,'_pointer_timer',None):self._pointer_timer.stop()
   if getattr(self,'_pointer_motion',None):self._pointer_motion.reset()
@@ -44,9 +59,11 @@ class GestureController(QObject):
   except Exception as error:
    self.release_pointer();self._pointer_error=str(error);self.last_gesture=str(error)
  def poll_browser_profile(self):
+  self.poll_game()
   if self._pointer_native and self._pointer_native.check_escape():self._pointer_error='Мышь остановлена клавишей Esc. Выключите и снова включите управление.'
   if self._pointer_at and time.monotonic()-self._pointer_at>.35:self.release_pointer()
   if self.relay is None or self.process is None:return
+  if self.control_mode=='joystick':self._browser_mode=None;return
   profile=self.relay.browser_profile();revision=profile['revision']
   if revision==self._browser_revision:return
   self.release_pointer();self._clear_drag();self._browser_revision=revision;self._browser_mode=profile['mode'];self._worker_profile_ready=False
@@ -88,6 +105,7 @@ class GestureController(QObject):
   if camera is None:camera=int(load_preferences().get('room_gesture_camera',0))
   self.ready=False;self.ready_event.clear();self.status='Запускаю распознавание руки…';self.performance='';self._last_media_id=0;self._calibrating=False;self._pointer_diagnostics={}
   self._clear_drag()
+  self.release_game();self.joystick_status=''
   runtime=Path(sys.executable)
   model=ROOT/'Models/gestures/hand_landmarker.task'
   if not runtime.exists() or not model.exists():raise RuntimeError('Модуль камеры не установлен. Запустите «Установить жесты» из папки приложения.')
@@ -131,7 +149,7 @@ class GestureController(QObject):
     if diagnostic.get('pose') in ('none','point','pinch','scroll','scroll_grab','fist','context','idle'):self._pointer_diagnostics['pose']=diagnostic['pose']
     self._pointer_diagnostics.update(recovering=diagnostic.get('recovering') is True)
    if data.get('calibration'):self.status=data['calibration']
-   elif self.effective_mode in ('mouse','system_mouse'):self.status=data.get('feedback',{}).get('phase','Мышь рукой: покажите выбранную руку')
+   elif self.effective_mode in ('mouse','system_mouse','joystick'):self.status=data.get('feedback',{}).get('phase','Покажите выбранную руку')
    elif not data.get('hand'):self.status='Рука не видна — команды не выполняются.'
    elif data.get('feedback',{}).get('palm'):self.status=data['feedback'].get('side','Рука')+'. '+data['feedback'].get('phase','Держите ладонь неподвижно 1 с.')
    elif data.get('feedback',{}).get('grip'):self.status='Захват обнаружен — потяните руку.'
@@ -166,6 +184,26 @@ class GestureController(QObject):
     self._drag_captured=captured
     self.last_gesture=('Правая' if hand=='Right' else 'Левая')+' · '+('Прокрутка завершена' if phase=='end' else 'Прокрутка отменена' if phase=='cancel' else 'Тянете страницу рукой')
    except Exception as error:self.last_gesture='Прокрутка не отправлена: '+str(error)
+  elif kind=='joystick':
+   from core.room_hand_joystick import valid_stick
+   captured=data.get('captured_monotonic');event_id=data.get('id')
+   if (self.effective_mode!='joystick' or data.get('mode')!='joystick' or not self.ready
+       or self.process is None or self._calibrating or not valid_stick(data)
+       or type(event_id) is not int or event_id<=self._game_id or type(captured) not in (int,float)
+       or not math.isfinite(captured) or captured<self._game_after or not 0<=time.monotonic()-captured<=.25):return
+   self._game_id=event_id;self.joystick_data=dict(data)
+   try:
+    if self._game_input is None:
+     from core.room_game_input import GameInput
+     from core.room_gesture_rules import read_settings
+     self._game_input=GameInput(read_settings(DATA_DIR/'config/gesture-actions.json')['joystick'])
+    self._game_input.send(data,captured);self.joystick_status=self._game_input.status
+   except Exception as error:
+    if self._game_input:
+     try:self._game_input.cancel()
+     except Exception:pass
+     self._game_input.blocked=True
+    self.joystick_status='Игровой ввод остановлен: '+str(error)
   elif kind=='pointer':
    from core.room_air_mouse import valid_pointer
    event_id=data.get('id');captured=data.get('captured_monotonic')
@@ -278,17 +316,25 @@ class GestureController(QObject):
   if not self.process or self.process.poll() is not None:raise RuntimeError('Сначала включите камеру.')
   self.process.stdin.write(json.dumps(command)+'\n');self.process.stdin.flush()
  def set_mode(self,mode):
+  if mode not in ('discrete','analog','mouse','system_mouse','joystick','restore'):raise ValueError('Неизвестный режим управления.')
+  was_game=self.control_mode=='joystick'
+  self.release_game();self.joystick_status=''
   self.release_pointer();self._pointer_native=None;self._pointer_error=''
   from core.room_gesture_rules import read_settings,save_settings
   path=DATA_DIR/'config/gesture-actions.json';config=read_settings(path)
   if mode=='restore':mode=config.get('mouse_return_mode','discrete')
   if mode in ('mouse','system_mouse') and config['mode'] not in ('mouse','system_mouse'):config['mouse_return_mode']=config['mode']
-  config['mode']=mode if mode in ('analog','mouse','system_mouse') else 'discrete';save_settings(path,config)
+  config['mode']=mode;save_settings(path,config)
   self.control_mode=config['mode']
+  if mode=='joystick':self._browser_mode=None
+  if was_game:
+   self._browser_revision=-1 if self.relay and self.relay.browser_profile()['revision']>0 else 0
+   self._worker_profile_ready=True
   self.reload_rules()
  def _clear_drag(self):
   self._drag_stream=None;self._drag_seen.clear();self._drag_after=time.monotonic();self._drag_captured=self._drag_after
  def reload_rules(self):
+  self.release_game()
   self.release_pointer();self._clear_drag()
   if self.relay:self.relay.invalidate()
   if self.process and self.process.poll() is None:self.tracking_command('reload_rules')
@@ -305,11 +351,13 @@ class GestureController(QObject):
  def calibrate(self):
   if not self.process or self.process.poll() is not None:raise RuntimeError('Сначала включите камеру.')
   self._calibrating=True
+  self.release_game()
   self._clear_drag()
   if self.relay:self.relay.invalidate()
   try:self.process.stdin.write(json.dumps({'command':'calibrate'})+'\n');self.process.stdin.flush()
   except Exception:self._calibrating=False;raise
  def stop(self):
+  self.release_game();self._game_id=0;self.joystick_status=''
   self.release_pointer();self._pointer_native=None;self._pointer_error='';self._pointer_id=0
   self.epoch+=1;process=self.process;self.process=None;self.ready=False;self.performance='';self._calibrating=False
   self._clear_drag()
@@ -403,6 +451,7 @@ QSlider::groove:horizontal{{height:6px;background:#163d49;border-radius:3px;}} Q
   self.bindings_card=box.parentWidget()
   self.mode_combo=QComboBox();self.mode_combo.setAccessibleName('Способ управления жестами')
   self.mode_combo.addItem('Обычное · длиннее мах — больше роликов','discrete');self.mode_combo.addItem('Аналоговое · тянуть страницу рукой','analog');self.mode_combo.addItem('Мышь рукой · выбранная страница','mouse');self.mode_combo.addItem('Мышь рукой · весь Mac','system_mouse')
+  self.mode_combo.addItem('Игровой джойстик · рукой','joystick')
   self.mode_combo.setCurrentIndex(self.mode_combo.findData(self.bindings['mode']));box.addWidget(self.mode_combo)
   note=QLabel('Аналоговое: сомкните пальцы и тяните страницу, как на сенсорном экране. Небольшое движение сдвигает её частично; размах на одно видео задаётся ползунком ниже. Неподвижная кисть не продолжает прокрутку. Влево/вправо — перемотка, левый уголок — громкость. Эти действия идут только в выбранную вкладку расширения, даже во время игры.');note.setWordWrap(True);box.addWidget(note)
   def mode_changed():
@@ -424,7 +473,8 @@ QSlider::groove:horizontal{{height:6px;background:#163d49;border-radius:3px;}} Q
 
   box=card('Назначения жестов','Выберите руку и назначьте действие. Поиск сверху находит любой жест и открывает нужную строку.');self.bindings_card=box.parentWidget()
   swap=QCheckBox('Поменять левую и правую руку местами');swap.setChecked(self.bindings['swap_hands']);box.addWidget(swap);self.swap_hands=swap
-  def swapped(value):self.bindings['swap_hands']=value;save_settings(path,self.bindings)
+  def swapped(value):
+   self.bindings=read_settings(path);self.bindings['swap_hands']=value;save_settings(path,self.bindings);self.controller.reload_rules()
   swap.toggled.connect(swapped);tabs=QTabWidget();box.addWidget(tabs);self.binding_tabs=tabs
   for hand,title in [('Right','Правая рука'),('Left','Левая рука')]:
    page=QWidget();form=QFormLayout(page);form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
@@ -432,7 +482,8 @@ QSlider::groove:horizontal{{height:6px;background:#163d49;border-radius:3px;}} Q
     combo=QComboBox();combo.setMinimumHeight(38);combo.setAccessibleName(title+' · '+label)
     for key,name in ACTIONS.items():combo.addItem(name,key)
     combo.setCurrentIndex(combo.findData(self.bindings['rules'][hand][event]));form.addRow(label,combo);self.binding_combos.append((hand,event,combo))
-    def changed(index,h=hand,e=event,c=combo):self.bindings['rules'][h][e]=c.currentData();save_settings(path,self.bindings)
+    def changed(index,h=hand,e=event,c=combo):
+     self.bindings=read_settings(path);self.bindings['rules'][h][e]=c.currentData();save_settings(path,self.bindings)
     combo.currentIndexChanged.connect(changed)
    tabs.addTab(page,title)
   def defaults():
@@ -449,6 +500,7 @@ QSlider::groove:horizontal{{height:6px;background:#163d49;border-radius:3px;}} Q
    self.refresh()
   box.addWidget(button('Вернуть стандартные жесты',defaults))
  def refresh(self):
+  if hasattr(self,'sync_game_settings'):self.sync_game_settings()
   if hasattr(self,'mode_combo') and self.mode_combo.currentData()!=self.controller.control_mode:
    self.bindings['mode']=self.controller.control_mode;self.mode_combo.blockSignals(True);self.mode_combo.setCurrentIndex(self.mode_combo.findData(self.controller.control_mode));self.mode_combo.blockSignals(False)
   self.refresh_distance()
