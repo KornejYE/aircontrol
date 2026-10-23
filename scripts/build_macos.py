@@ -20,7 +20,7 @@ for name in ('Source','BrowserGestures','Models','Runtime'):
         # volumes. Only this new build's partial output is replaced.
         if destination.exists():shutil.rmtree(destination)
         shutil.copytree(source,destination,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
-for name in ('LICENSE','NOTICE.md','README.md','README.ru.md','PRIVACY.md','UPSTREAM.json'):shutil.copy2(ROOT/name,resources/name)
+for name in ('LICENSE','NOTICE.md','README.md','README.ru.md','PRIVACY.md','UPSTREAM.json','CHANGELOG.md'):shutil.copy2(ROOT/name,resources/name)
 shutil.copytree(ROOT/'docs',resources/'docs')
 # Recreate the virtual environment's entry points at their installed location.
 # The Python installation is the system/Homebrew installation, never Jarvis.
@@ -30,8 +30,8 @@ subprocess.run([str(ROOT/'Runtime/bin/python'),'-m','venv','--without-pip',str(r
 for entry in (resources/'Runtime/bin').iterdir():
     if entry.is_symlink() and entry.readlink().is_absolute():
         resolved=entry.resolve();entry.unlink();shutil.copy2(resolved,entry)
-subprocess.run(['/usr/bin/swiftc',str(ROOT/'Native/AirControl.swift'),'-framework','AppKit','-o',str(macos/'AirControl')],check=True)
-info=dict(CFBundleName='AirControl',CFBundleDisplayName='AirControl',CFBundleIdentifier='local.aircontrol.desktop',CFBundleExecutable='AirControl',CFBundlePackageType='APPL',CFBundleShortVersionString='1.1.1',CFBundleVersion='3',CFBundleIconFile='AirControl.icns',NSCameraUsageDescription='Распознавать движения рук для управления компьютером. Кадры обрабатываются локально.',NSHighResolutionCapable=True)
+subprocess.run(['/usr/bin/swiftc',str(ROOT/'Native/AirControl.swift'),'-framework','AppKit','-framework','AVFoundation','-o',str(macos/'AirControl')],check=True)
+info=dict(CFBundleName='AirControl',CFBundleDisplayName='AirControl',CFBundleIdentifier='local.aircontrol.desktop',CFBundleExecutable='AirControl',CFBundlePackageType='APPL',CFBundleShortVersionString='1.2.0',CFBundleVersion='4',CFBundleIconFile='AirControl.icns',NSCameraUsageDescription='Распознавать движения рук и выбранный предмет для управления компьютером. Кадры обрабатываются локально.',NSHighResolutionCapable=True)
 with (bundle/'Contents/Info.plist').open('wb') as handle:plistlib.dump(info,handle)
 # Render the code-native icon using Qt; no image-generation dependency.
 from PyQt6.QtCore import Qt

@@ -14,6 +14,8 @@ def game_settings(value=None):
     return dict(
         output=value.get('output') if value.get('output') in ('wasd', 'mouse') else 'preview',
         hand='Left' if value.get('hand') == 'Left' else 'Right',
+        source='object' if value.get('source') == 'object' else 'hand',
+        object_span=_number(value.get('object_span'), .12, .025, .6),
         grip='pinch' if value.get('grip') == 'pinch' else 'fist',
         motion='translate' if value.get('motion') == 'translate' else 'tilt',
         tilt_degrees=_number(value.get('tilt_degrees'), 30., 10., 60.),

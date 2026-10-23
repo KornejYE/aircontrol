@@ -87,8 +87,10 @@ class GameInput:
         self.last = None
         self.blocked = True  # reconfiguration cannot inherit an already-held grip
         self.escaped = False
+        self.neutral_since = None
         self.status = ('Проверка на экране · ввод в игру выключен' if self.config['output']=='preview'
-                       else 'Отпустите захват перед началом управления')
+                       else 'Дождитесь установки нейтрали ручки' if self.config['source']=='object'
+                       else 'Раскройте руку перед началом управления')
 
     def cancel(self, *, neutral=True):
         error = None
@@ -109,6 +111,7 @@ class GameInput:
             self.last_mouse = None
             self.recent.clear()
             self.last = None
+            self.neutral_since = None
         if error:
             raise error
 
@@ -118,11 +121,13 @@ class GameInput:
         if self.api.escape():
             self.escaped = True
             self.cancel()
-            self.status = 'Остановлено клавишей Esc · выключите и включите управление для возврата'
+            self.status = ('Остановлено клавишей Esc · нажмите «Новая нейтраль» для возврата' if self.config['source']=='object'
+                           else 'Остановлено клавишей Esc · выключите и включите управление для возврата')
         elif self.api.foreground() != self.config['target']:
             self.cancel(neutral=False)
             self.blocked = True
-            self.status = 'Игра не на переднем плане · отпустите захват перед продолжением'
+            self.status = ('Игра не на переднем плане · верните ручку в нейтраль перед продолжением' if self.config['source']=='object'
+                           else 'Игра не на переднем плане · раскройте руку перед продолжением')
         elif self.last is not None and not 0 <= self.clock() - self.last <= .25:
             self.cancel()
             self.blocked = True
@@ -151,6 +156,11 @@ class GameInput:
             self.cancel()
             self.blocked = False
             return
+        if self.blocked and self.config['source']=='object' and not self.escaped and self.api.foreground()==self.config['target']:
+            if math.hypot(packet['x'],packet['y'])<=.03:
+                if self.neutral_since is None:self.neutral_since=self.clock()
+                if self.clock()-self.neutral_since>=.4:self.blocked=False
+            else:self.neutral_since=None
         if self.escaped or self.blocked or self.api.foreground() != self.config['target']:
             return
         self.last = captured

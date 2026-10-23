@@ -41,3 +41,35 @@ assert all(len(r['active_hands'])<=2 for r in previews)
 assert all(set(r['active_hands'])=={'Right','Left'} for r in previews[1:])
 assert all(r['feedback'] not in r['feedback']['hands'] for r in previews)
 print('PASS: actual worker processes and serializes four frames with one/two/six/eight visible hands, at most two controllers and full landmark drawing; no camera or model inference.')
+
+class NoInference(Detector):
+ def detect_for_video(self,*args):raise AssertionError('Object mode must not infer hand landmarks')
+clock=iter(10.+i*.1 for i in range(1000));output=io.StringIO()
+with tempfile.TemporaryDirectory() as tmp:
+ root=Path(tmp);(root/'config').mkdir();(root/'config/gesture-actions.json').write_text(json.dumps({'mode':'joystick','joystick':{'source':'object'}}))
+ with patch.object(worker,'DATA_DIR',root),patch.object(worker,'LatestFrame',Frames),patch('cv2.VideoCapture',return_value=Camera()),patch.object(vision.HandLandmarker,'create_from_options',return_value=NoInference()),patch.object(worker.os,'nice'),patch.object(worker.time,'monotonic',side_effect=lambda:next(clock)),patch.object(sys,'argv',['worker','--model','unused.task']),patch.object(sys,'stdin',io.StringIO()),contextlib.redirect_stdout(output):
+  try:worker.main()
+  except KeyboardInterrupt:pass
+rows=[json.loads(line) for line in output.getvalue().splitlines()]
+previews=[r for r in rows if r['type']=='preview'];sticks=[r for r in rows if r['type']=='joystick']
+assert len(previews)==4 and all(r['detected_hands']==0 for r in previews)
+assert sticks and all(not r['active'] and r['x']==0 and r['y']==0 for r in sticks)
+print('PASS: object mode keeps previews alive, bypasses hand inference and emits no active input before explicit selection.')
+
+# A pending system permission prompt must outlive the first failed open.
+class PendingCamera(Camera):
+ def __init__(self,opened):self.opened=opened;self.released=False
+ def isOpened(self):return self.opened
+ def release(self):self.released=True
+pending=PendingCamera(False);granted=PendingCamera(True)
+fake=S(CAP_AVFOUNDATION=1,VideoCapture=lambda *args:next(attempts))
+attempts=iter([pending,granted])
+with patch.object(sys,'platform','darwin'),patch.object(worker.time,'sleep'):
+ assert worker.open_camera(fake,0) is granted
+assert pending.released
+denied=PendingCamera(False);fake.VideoCapture=lambda *args:denied
+clock=iter([10.,10.,41.])
+with patch.object(sys,'platform','darwin'),patch.object(worker.time,'sleep'),patch.object(worker.time,'monotonic',side_effect=lambda:next(clock)):
+ assert worker.open_camera(fake,0) is denied
+assert denied.released
+print('PASS: pending macOS camera permission can finish; retry remains bounded when the camera stays unavailable.')

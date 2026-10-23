@@ -31,6 +31,7 @@ Runtime/bin/python checks/test-stepped-wrist-gestures.py
 Runtime/bin/python checks/test-gesture-browser-profile.py
 Runtime/bin/python checks/test-hand-joystick.py
 Runtime/bin/python checks/test-joystick-controller.py
+Runtime/bin/python checks/test-object-joystick.py
 node checks/test-air-mouse-browser.cjs
 ```
 

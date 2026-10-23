@@ -17,6 +17,7 @@ class GestureController(QObject):
   super().__init__(parent);self.process=None;self.relay=None;self.epoch=0;self.status='Камера выключена';self.frame=None;self.last_gesture='Последний жест: пока нет';self.performance='';self._last_media_id=0;self._calibrating=False;self.ready=False;self.ready_event=threading.Event();self.browser_media=bool(load_preferences().get('room_gestures_browser_media',False));self.message.connect(self.receive);self.request_signal.connect(self.execute)
   from core.room_gesture_rules import read_settings
   config=read_settings(DATA_DIR/'config/gesture-actions.json');self.control_mode=config['mode'];self.analog_span=config.get('analog_span',.20)
+  self.game_config=config['joystick']
   value=load_preferences().get('room_gesture_distance',.085)
   self.discrete_distance=max(.04,min(.2,value)) if type(value) in (int,float) and math.isfinite(value) else .085
   self._drag_stream=None;self._drag_seen=deque(maxlen=64);self._drag_after=0.;self._drag_captured=0.
@@ -87,7 +88,7 @@ class GestureController(QObject):
  def camera_snapshot(self):
   process=self.process;running=process is not None and process.poll() is None
   ready=running and self.ready
-  return dict(pointer_error=self._pointer_error,mode=self.effective_mode,running=running,ready=ready,state='on' if ready else 'starting' if running else 'off',tracking=self._pointer_diagnostics,physical_pauses=getattr(self._pointer_native,'physical_pauses',0),physical_pause=bool(self._pointer_native and self._pointer_native.paused_until>time.monotonic()),performance=self.performance,joystick={k:self.joystick_data.get(k) for k in ('x','y','active','state')},joystick_status=self.joystick_status)
+  return dict(pointer_error=self._pointer_error,mode=self.effective_mode,running=running,ready=ready,state='on' if ready else 'starting' if running else 'off',tracking=self._pointer_diagnostics,physical_pauses=getattr(self._pointer_native,'physical_pauses',0),physical_pause=bool(self._pointer_native and self._pointer_native.paused_until>time.monotonic()),performance=self.performance,joystick={k:self.joystick_data.get(k) for k in ('x','y','active','state')},joystick_status=self.joystick_status,game_input_ready=bool(self._game_input and self._game_input.api))
  def browser_camera(self,enabled):
   request={'action':'browser_on' if enabled else 'browser_off','done':threading.Event()}
   self.request_signal.emit(request)
@@ -143,6 +144,7 @@ class GestureController(QObject):
     if self.relay:self.relay.acknowledge_browser_profile(data['revision'])
   elif kind=='status':self.status=data.get('text','');self.ready=True;self.ready_event.set()
   elif kind=='preview':
+   self.frame=data.get('image')
    diagnostic=data.get('pointer_diagnostics',{})
    if isinstance(diagnostic,dict):
     self._pointer_diagnostics={key:diagnostic[key] for key in ('missing_frames','recoveries','tracking_resets','time_gaps','fist_stops') if type(diagnostic.get(key)) is int and 0<=diagnostic[key]<2**53}
@@ -279,6 +281,7 @@ class GestureController(QObject):
   elif kind=='performance':
    fps=data.get('fps')
    if isinstance(fps,(int,float)) and 0<=fps<1000:self.performance=f'Распознавание: {fps:g} кадров/с'
+  elif kind=='object_notice':self.status=data.get('text','')
   elif kind=='calibration':self._calibrating=False;self.last_gesture=data.get('text','')
   elif kind in ('error','ended'):
    self.stop();self.status=data.get('text','Камера остановлена.');self.ready_event.set()
@@ -312,6 +315,18 @@ class GestureController(QObject):
   return ('Камера включена. ' if self.ready else 'Камера выключена или запускается. ')+self.status+(' Автозапуск включён.' if load_preferences().get('room_gestures_autostart') else ' Автозапуск выключен.')
  def tracking_command(self,command):
   self.worker_command({'command':command})
+ def select_object(self,box):
+  from core.room_object_joystick import valid_box
+  if not valid_box(box):raise ValueError('Выделите конец ручки, включая его края')
+  from core.room_gesture_rules import read_settings,save_settings
+  path=DATA_DIR/'config/gesture-actions.json';config=read_settings(path)
+  config['mode']='joystick';config['joystick']['source']='object';save_settings(path,config)
+  self.control_mode='joystick';self._browser_mode=None;self.reload_rules()
+  self.worker_command(dict(command='object_select',box=list(box)))
+ def object_neutral(self):
+  self.release_game();self.worker_command({'command':'object_neutral'})
+ def pause_object(self):
+  self.release_game();self.worker_command({'command':'object_pause'})
  def worker_command(self,command):
   if not self.process or self.process.poll() is not None:raise RuntimeError('Сначала включите камеру.')
   self.process.stdin.write(json.dumps(command)+'\n');self.process.stdin.flush()
@@ -334,6 +349,8 @@ class GestureController(QObject):
  def _clear_drag(self):
   self._drag_stream=None;self._drag_seen.clear();self._drag_after=time.monotonic();self._drag_captured=self._drag_after
  def reload_rules(self):
+  from core.room_gesture_rules import read_settings
+  self.game_config=read_settings(DATA_DIR/'config/gesture-actions.json')['joystick']
   self.release_game()
   self.release_pointer();self._clear_drag()
   if self.relay:self.relay.invalidate()

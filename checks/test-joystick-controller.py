@@ -87,6 +87,14 @@ class Controller(unittest.TestCase):
         self.receive();self.c.calibrate()
         self.assertEqual(self.events[-1], (2,False))
         self.receive(ident=2);self.assertEqual(len(self.events), 2)
+    def test_object_selection_releases_old_input_and_sends_only_bounded_camera_commands(self):
+        import json
+        self.receive();self.c.select_object([.4,.3,.1,.2])
+        self.assertEqual(self.events[-1],(2,False))
+        self.assertEqual(read_settings(self.root/'config/gesture-actions.json')['joystick']['source'],'object')
+        commands=[json.loads(line) for line in self.c.process.stdin.getvalue().splitlines()]
+        self.assertEqual(commands[-1],{'command':'object_select','box':[.4,.3,.1,.2]})
+        with self.assertRaises(ValueError):self.c.select_object([0,0,1,1])
 
 
 if __name__ == '__main__':unittest.main()

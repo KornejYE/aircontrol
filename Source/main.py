@@ -17,7 +17,7 @@ from core.room_gesture_panel import install_controller,open_panel
 from core.room_settings_shell import STYLE
 
 ROOT=Path(__file__).resolve().parents[1]
-APP_VERSION='1.1.1'
+APP_VERSION='1.2.0'
 
 class Preview(QLabel):
     def __init__(self):
@@ -59,6 +59,10 @@ class AirControlWindow(QMainWindow):
         install_controller(self);self.controller=self._gesture_controller;self.controller.message.connect(self.receive)
         self.game_tools=QFrame();self.game_tools.setFixedWidth(330);game_column=QVBoxLayout(self.game_tools);game_column.setContentsMargins(0,0,0,0)
         self.stick=StickMeter(self.controller);self.stick.setMinimumHeight(240);game_column.addWidget(self.stick,1)
+        from core.room_object_picker import pick_object
+        self.object_pick=QPushButton('Выбрать ручку без метки');self.object_pick.clicked.connect(lambda:pick_object(self));game_column.addWidget(self.object_pick)
+        self.object_neutral=QPushButton('Новая нейтраль · через 5 секунд');self.object_neutral.clicked.connect(self.recenter_object);game_column.addWidget(self.object_neutral)
+        self.object_pause=QPushButton('Остановить джойстик');self.object_pause.clicked.connect(self.pause_object);game_column.addWidget(self.object_pause)
         self.game_settings=QPushButton('Настроить джойстик');self.game_settings.clicked.connect(lambda:self.settings('games'));game_column.addWidget(self.game_settings);preview_row.addWidget(self.game_tools)
         self.refresh_timer=QTimer(self);self.refresh_timer.setInterval(200);self.refresh_timer.timeout.connect(self.refresh);self.refresh_timer.start()
         self.create_tray();self.refresh()
@@ -87,6 +91,12 @@ class AirControlWindow(QMainWindow):
         self.refresh()
     def stop(self):
         self.controller.stop();self.preview.reset();self.refresh()
+    def recenter_object(self):
+        try:self.controller.object_neutral()
+        except Exception as error:self.controller.status=str(error)
+    def pause_object(self):
+        try:self.controller.pause_object()
+        except Exception as error:self.controller.status=str(error)
     def quit(self):self._quit=True;self.controller.shutdown();QApplication.instance().quit()
     def refresh(self):
         c=self.controller;status=c.camera_snapshot();running=status['running']
@@ -102,9 +112,11 @@ class AirControlWindow(QMainWindow):
         elif current=='joystick':
             from core.room_gesture_rules import read_settings
             game=c._game_input.config if c._game_input else read_settings(DATA_DIR/'config/gesture-actions.json')['joystick']
+            self.object_neutral.setVisible(game['source']=='object');self.object_pause.setVisible(game['source']=='object')
             grip='Кулак на столе' if game['grip']=='fist' else 'Щипок большого и указательного'
             motion='наклоняйте кисть как джойстик' if game['motion']=='tilt' else 'перемещайте кисть от точки захвата'
-            self.hint.setText(grip+' · Удержите 0,2 секунды, затем '+motion+'\nРаскройте руку — остановка · Esc — отключить · Хват и движение меняются в настройках джойстика')
+            if game['source']=='object':self.hint.setText('Выделите конец ручки кнопкой справа · Через 5 секунд её положение станет нейтралью\nДвигайте видимый конец ручки · Esc или «Остановить джойстик» — остановка · После смены окна верните ручку в нейтраль')
+            else:self.hint.setText(grip+' · Удержите 0,2 секунды, затем '+motion+'\nРаскройте руку — остановка · Esc — отключить · Хват и движение меняются в настройках джойстика')
         else:self.hint.setText('Сомкните три пальца и потяните  ·  Открытая ладонь на 1 секунду — пауза\nУголок левой рукой — громкость  ·  Для управления вкладками подключите браузер')
         if not running and not self.preview.frame.isNull():self.preview.reset()
     def receive(self,data):

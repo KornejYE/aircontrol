@@ -14,6 +14,8 @@ This includes camera selection, gesture bindings, sensitivity, calibration and d
 
 The optional game joystick lists local foreground-capable applications so you can choose a target. It stores that application's bundle identifier and checks which application is in front before sending ordinary keyboard or mouse events. It does not read game memory, inspect a game's process contents or capture gameplay. The default output is a local on-screen preview.
 
+For optional pen/object control, you explicitly select a small region of the camera preview. Its appearance template is kept in the camera worker's memory for local CSRT tracking, is not saved to disk or uploaded, and is discarded when the camera stops. It cannot identify arbitrary objects by name; selecting an object and establishing neutral are manual actions.
+
 Camera ownership uses a small local lock file in the user cache. It contains an application label and process ID, not camera data.
 
 During setup, packages are downloaded from the configured Python package registry and the hand model is downloaded from Google's official model host. Normal camera processing does not need those services.

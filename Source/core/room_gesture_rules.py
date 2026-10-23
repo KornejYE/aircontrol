@@ -150,6 +150,7 @@ class HandRules:
   if hand not in self.engines:return None
   if self.config['swap_hands']:hand='Left' if hand=='Right' else 'Right'
   if self.config['mode']=='joystick':
+   if self.config['joystick']['source']=='object':return None
    if hand!=self.config['joystick']['hand']:return None
    packet=(self.joystick.update(landmarks,now,self.config['joystick']) if allow_actions else self.joystick.cancel('lost'))
    fist=self.config['joystick']['grip']=='fist'

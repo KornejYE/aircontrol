@@ -1,5 +1,14 @@
 # Changes
 
+## 1.2.0 — 2026-10-23
+
+- Added explicit selection and local CSRT tracking of an ordinary pen tip/cap without markers; no hand inference is performed while this source is selected.
+- Added a live region-selection dialog, a five-second neutral countdown, object sensitivity, pause/rearm controls and neutral-dwell resume after focus changes.
+- Added loss, appearance-change, bounds and discontinuity checks. Object templates stay in memory and are not automatically reacquired after loss.
+- Synthetic object tests exercise the actual CSRT tracker and verify fail-closed input and focus recovery without sending real OS input.
+- Kept the camera worker alive during the asynchronous macOS camera-permission prompt instead of immediately terminating its request.
+- Kept the native macOS launcher registered with AppKit while the Python interface runs, allowing system authorization dialogs to be presented.
+
 ## 1.1.1 — 2026-10-23
 
 - Added a closed-fist grip and 3D tilt steering for a hand resting on its little-finger edge, with a separate angle sensitivity setting.

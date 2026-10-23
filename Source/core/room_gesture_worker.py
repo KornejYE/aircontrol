@@ -7,6 +7,7 @@ from core.room_gesture_engine import GestureEngine,calibrated_profile
 from core.room_gesture_rules import HandRules,read_settings
 from core.room_hand_tracks import HandTracks,CONNECTIONS,MAX_HANDS
 from core.room_paths import DATA_DIR
+from core.room_object_joystick import ObjectJoystick,valid_box
 
 PREVIEW_INTERVAL = 1 / 30
 _emit_lock = threading.RLock()
@@ -81,6 +82,19 @@ class LatestFrame:
   self.thread.join(timeout=1.)
 
 
+def open_camera(cv2,index):
+ """Keep the worker alive while macOS displays its asynchronous camera prompt."""
+ backend=cv2.CAP_DSHOW if sys.platform=='win32' else cv2.CAP_AVFOUNDATION if sys.platform=='darwin' else cv2.CAP_ANY
+ camera=cv2.VideoCapture(index,backend)
+ if sys.platform=='darwin' and not camera.isOpened():
+  # OpenCV may return before the user has answered the system permission
+  # dialog. Exiting here destroys that pending request with the worker.
+  deadline=time.monotonic()+30
+  while not camera.isOpened() and time.monotonic()<deadline:
+   camera.release();time.sleep(.5);camera=cv2.VideoCapture(index,backend)
+ return camera
+
+
 def main():
  p=argparse.ArgumentParser();p.add_argument('--camera',type=int,default=0);p.add_argument('--model',required=True);p.add_argument('--distance',type=float,default=.085);a=p.parse_args()
  if sys.platform!='win32':os.nice(5)
@@ -90,7 +104,7 @@ def main():
  from mediapipe.tasks import python
  from mediapipe.tasks.python import vision
  options=vision.HandLandmarkerOptions(base_options=python.BaseOptions(model_asset_path=a.model),running_mode=vision.RunningMode.VIDEO,num_hands=MAX_HANDS,min_hand_detection_confidence=.65,min_hand_presence_confidence=.50,min_tracking_confidence=.50)
- camera=cv2.VideoCapture(a.camera,cv2.CAP_DSHOW if sys.platform=='win32' else cv2.CAP_AVFOUNDATION if sys.platform=='darwin' else cv2.CAP_ANY)
+ camera=open_camera(cv2,a.camera)
  if not camera.isOpened():camera.release();raise RuntimeError('Камера недоступна. Проверьте разрешение и закройте приложения, занявшие её.')
  camera.set(cv2.CAP_PROP_FRAME_WIDTH,640);camera.set(cv2.CAP_PROP_FRAME_HEIGHT,360);camera.set(cv2.CAP_PROP_FPS,30)
  # Driver hint plus latest-frame replacement: a slow inference cannot build lag.
@@ -111,13 +125,20 @@ def main():
      with runtime_lock:
       if pending_runtime is None or validated['revision']>=pending_runtime['revision']:pending_runtime=validated
     elif data.get('command') in ('calibrate','reload_rules'):commands.put_nowait(data['command'])
+    elif data.get('command')=='object_select' and valid_box(data.get('box')):commands.put_nowait(data)
+    elif data.get('command') in ('object_neutral','object_pause'):commands.put_nowait(data)
    except (ValueError,TypeError,AttributeError,queue.Full):pass
  threading.Thread(target=read_commands,daemon=True).start()
  router=HandRules(distance=max(.04,min(.2,a.distance)),profile=profile);rules_path=DATA_DIR/'config/gesture-actions.json';last_rules=0
+ object_tracker=ObjectJoystick()
  def reload_rules():
   from core.preferences import load_preferences
   router.set_distance(runtime_distance(load_preferences().get('room_gesture_distance',.085),runtime_overlay))
+  previous=router.config['mode']=='joystick' and router.config['joystick']['source']=='object'
   router.configure(runtime_settings(read_settings(rules_path),runtime_overlay))
+  current=router.config['mode']=='joystick' and router.config['joystick']['source']=='object'
+  if previous!=current:object_tracker.clear()
+ reload_rules()
  tracks=HandTracks()
  last_stamp=0;started=time.monotonic();last_sequence=0;media_sequence=0
  next_preview=started+PREVIEW_INTERVAL/2
@@ -133,7 +154,9 @@ def main():
     if frame.shape[1]!=640 or frame.shape[0]!=360:frame=cv2.resize(frame,(640,360))
     rgb=cv2.cvtColor(frame,cv2.COLOR_BGR2RGB);prep_end=time.monotonic()
     stamp=max(last_stamp+1,int((captured-started)*1000));last_stamp=stamp
-    result=detector.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB,data=rgb),stamp)
+    object_mode=router.config['mode']=='joystick' and router.config['joystick']['source']=='object'
+    result=(SimpleNamespace(hand_landmarks=[],handedness=[],hand_world_landmarks=[]) if object_mode
+            else detector.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB,data=rgb),stamp))
     detect_end=time.monotonic()
     worlds=getattr(result,'hand_world_landmarks',[]) or []
     detections=[(with_world_points(landmarks,worlds[index] if index<len(worlds) else None),result.handedness[index][0].category_name,result.handedness[index][0].score)
@@ -155,6 +178,12 @@ def main():
       if command=='calibrate':
        calibration={'stage':'open','start':cycle,'open':[],'closed':[]};engine.reset();engine.require_media_release()
       elif command=='reload_rules':reload_rules();last_rules=cycle
+      elif isinstance(command,dict):
+       if command['command']=='object_select':object_tracker.select(command['box'],captured)
+       elif command['command']=='object_neutral':
+        try:object_tracker.recenter(captured)
+        except ValueError as error:emit('object_notice',text=str(error))
+       elif command['command']=='object_pause':object_tracker.pause()
     except queue.Empty:pass
     if calibration is not None:
      if 'track_id' not in calibration:calibration['track_id']=closest.identity if closest else None
@@ -190,6 +219,12 @@ def main():
      # contains this very dict and JSON serialization kills the camera worker.
      engine.feedback=dict(max(feedbacks,key=lambda f: (float(f.get('media_progress',0)),bool(f.get('corner_armed')),bool(f.get('grip')))))
      engine.feedback['hands']=feedbacks
+    object_mode=router.config['mode']=='joystick' and router.config['joystick']['source']=='object'
+    if object_mode:
+     if calibration is not None or not 0<=time.monotonic()-captured<=.25:object_tracker.lose('Нет свежих кадров · выберите ручку заново')
+     packet=object_tracker.update(frame,captured,router.config['joystick'])
+     actions.append(('Object','object_track',packet))
+     engine.feedback=dict(phase=object_tracker.feedback,grip=packet['active'])
     if calibration is not None:
      c=calibration;elapsed=cycle-c['start']
      calibration_text=('Покажите раскрытую ладонь' if c['stage']=='open' else 'Сведите три пальца в захват и удерживайте')+' · '+str(max(1,5-int(elapsed)))+' с'
@@ -227,6 +262,7 @@ def main():
       centre=tuple(round(sum(xy[i][axis] for i in (0,5,9,13,17))/5) for axis in (0,1))
       cv2.circle(frame,centre,5,(255,255,255),-1,cv2.LINE_AA)
       cv2.putText(frame,actual+(' ACTIVE' if active else '')+' #'+str(visible_hand.identity),(xy[0][0]-20,xy[0][1]+22),cv2.FONT_HERSHEY_SIMPLEX,.6,colour,2,cv2.LINE_AA)
+     if object_mode:object_tracker.draw(frame)
      thumb=frame;ok,jpg=cv2.imencode('.jpg',thumb,[cv2.IMWRITE_JPEG_QUALITY,65])
      if ok:emit('preview',image=base64.b64encode(jpg).decode('ascii'),hand=bool(points),feedback=engine.feedback,calibration=calibration_text,detected_hands=len(tracks.visible),active_hands=[('Left' if side=='Right' else 'Right') if router.config['swap_hands'] else side for side,_ in tracked],pointer_diagnostics=router.mouse.tracking_snapshot() if router.config['mode'] in ('mouse','system_mouse') else {})
     finished=time.monotonic();stats_count+=1;stats_prep+=prep_end-prep_start;stats_detect+=detect_end-prep_end;stats_preview+=finished-preview_start
