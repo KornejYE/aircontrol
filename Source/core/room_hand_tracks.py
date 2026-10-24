@@ -37,6 +37,10 @@ class HandTracks:
         track = self.tracks.get(identity)
         if track is None or track['side'] != side:
             return False
+        if not any(h.identity == identity for h in self.visible):
+            return False
+        if self._side_locks.get(identity) == side:
+            return True
         self._side_locks[identity] = side
         track['conflict'] = None
         return True
@@ -69,9 +73,14 @@ class HandTracks:
                 continue
         self.tracks = {i:t for i,t in self.tracks.items() if 0 <= now-t['at'] < .45}
         self._side_locks = {i:side for i,side in self._side_locks.items() if i in self.tracks}
+        previous_visible = {h.identity for h in self.visible}
         pairs = []
         for index, (_,label,confidence,centre,size) in enumerate(rows):
             for identity, track in self.tracks.items():
+                # A different hand entering the same spot must not inherit a
+                # disappeared hand's side lock. Keep short same-side recovery.
+                if identity not in previous_visible and label != track['side'] and confidence >= .85:
+                    continue
                 distance = math.dist(centre, track['centre'])
                 ratio = size/track['size']
                 if distance > max(.12,min(.30,math.sqrt(track['size'])*1.5)) or not .3 < ratio < 3.3:
@@ -93,7 +102,16 @@ class HandTracks:
                 track = self.tracks[identity]
                 if identity in self._side_locks:
                     track['side'] = self._side_locks[identity]
-                    track['conflict'] = None
+                    # A lock absorbs brief label jitter, not a permanent model
+                    # mistake. Repeated locking each frame must not reset this.
+                    if label == track['side'] or confidence < .85:
+                        track['conflict'] = None
+                    elif track['conflict'] is None:
+                        track['conflict'] = now
+                    elif now-track['conflict'] >= 1.:
+                        track['side'] = label
+                        track['conflict'] = None
+                        self._side_locks.pop(identity, None)
                 elif label == track['side'] or confidence < .85:
                     track['conflict'] = None
                 elif track['conflict'] is None:
@@ -103,6 +121,8 @@ class HandTracks:
             track.update(centre=centre,size=size,at=now)
             self.tracks[identity]=track
             visible.append(VisibleHand(identity,track['side'],points,size))
+        visible_ids = {h.identity for h in visible}
+        self._side_locks = {i:side for i,side in self._side_locks.items() if i in visible_ids}
         self.changed = set()
         selected = []
         for side in ('Right','Left'):

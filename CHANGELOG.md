@@ -1,5 +1,11 @@
 # Changes
 
+## 1.4.1 — 2026-10-25
+
+- Removed internal tracking IDs from the camera overlay. They identify temporary tracks, not people or the number of hands.
+- A newly appearing hand no longer inherits a disappeared opposite-side hand’s identity when the classifier is confident. Pointer locks still absorb short handedness glitches, but allow a sustained confident correction instead of preserving an incorrect side indefinitely.
+- Added regression replays for opposite-hand replacement and repeated lock renewal. Windows 1.4.0 GUI and camera launch have now been observed, with two hands tracked at approximately 15 FPS; full input/game compatibility remains under validation.
+
 ## 1.4.0 — Windows preview, 2026-10-24
 
 - Added a Windows x64 native input adapter using ctypes/SendInput, monitor subsets, physical-mouse priority, Esc stop and balanced button/key release. No driver or game-process access is required.

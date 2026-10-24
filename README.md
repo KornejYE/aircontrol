@@ -23,7 +23,7 @@ AirControl is a standalone desktop application with local hand tracking, configu
 
 ## Status
 
-This is an early **source release**. The desktop app and system mouse have been checked on an Apple Silicon Mac with Python 3.11. A Windows x64 source installer is available as a preview: see [Windows installation](windows/README.ru.md). On the test laptop, Smart App Control blocked native Qt/NumPy libraries, so Windows GUI and camera operation remain unverified. Android is not part of this release.
+This is an early **source release**. The desktop app and system mouse have been checked on an Apple Silicon Mac with Python 3.11. A Windows x64 source installer is available as a preview: see [Windows installation](windows/README.ru.md). Windows GUI and two-hand camera tracking have been observed on the test laptop. Native Qt/NumPy libraries can be blocked by Smart App Control; full input/game compatibility remains under validation. Android is not part of this release.
 
 Cursor smoothing and short tracking-loss recovery improve continuity but do not eliminate every tracking error. Good lighting, a visible hand and a steady camera help. Pointer output interpolates only received positions; it does not predict an invisible hand.
 

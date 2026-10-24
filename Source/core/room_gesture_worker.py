@@ -265,7 +265,7 @@ def main():
       for index,point in enumerate(xy):cv2.circle(frame,point,(5 if index in (0,4,8,12,16,20) else 3) if active else 2,colour,-1,cv2.LINE_AA)
       centre=tuple(round(sum(xy[i][axis] for i in (0,5,9,13,17))/5) for axis in (0,1))
       cv2.circle(frame,centre,5,(255,255,255),-1,cv2.LINE_AA)
-      cv2.putText(frame,actual+(' ACTIVE' if active else '')+' #'+str(visible_hand.identity),(xy[0][0]-20,xy[0][1]+22),cv2.FONT_HERSHEY_SIMPLEX,.6,colour,2,cv2.LINE_AA)
+      cv2.putText(frame,actual+(' ACTIVE' if active else ''),(xy[0][0]-20,xy[0][1]+22),cv2.FONT_HERSHEY_SIMPLEX,.6,colour,2,cv2.LINE_AA)
      if object_mode:object_tracker.draw(frame)
      thumb=frame;ok,jpg=cv2.imencode('.jpg',thumb,[cv2.IMWRITE_JPEG_QUALITY,65])
      if ok:emit('preview',image=base64.b64encode(jpg).decode('ascii'),hand=bool(points),feedback=engine.feedback,calibration=calibration_text,detected_hands=len(tracks.visible),active_hands=[('Left' if side=='Right' else 'Right') if router.config['swap_hands'] else side for side,_ in tracked],pointer_diagnostics=router.mouse.tracking_snapshot() if router.config['mode'] in ('mouse','system_mouse') else {})

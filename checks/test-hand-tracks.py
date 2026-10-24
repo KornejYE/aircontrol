@@ -35,6 +35,20 @@ for locked in (False,True):
   t.clear_locks()
   assert t.update([(right,'Left',.99)],.5)[0][0]=='Right'
   assert t.update([(right,'Left',.99)],.8)[0][0]=='Left','unlock must restore delayed relabel correction'
+# A sustained confident correction must recover even when the worker renews
+# the pointer lock every frame. Brief label glitches remain absorbed above.
+t=HandTracks();t.update([(right,'Right',.99)],0);assert t.lock_side('Right')
+for now in (.1,.3,.6,.9):
+ assert t.update([(right,'Left',.99)],now)[0][0]=='Right'
+ assert t.lock_side('Right')
+assert t.update([(right,'Left',.99)],1.11)[0][0]=='Left'
+# Replacing a disappeared right hand with a left at the same location must
+# not inherit the earlier physical identity or its anatomical side lock.
+t=HandTracks();t.update([(right,'Right',.99)],0);original=t.visible[0].identity
+assert t.lock_side('Right');t.update([],.1)
+assert not t.lock_side('Right')
+assert t.update([(right,'Left',.99)],.2)[0][0]=='Left'
+assert t.visible[0].identity!=original
 # Expired physical identities cannot pass their lock to a new detection.
 t=HandTracks();assert not t.lock_side('Right');assert not t.lock_side('invalid')
 t.update([(right,'Right',.99)],0);original=t.visible[0].identity;assert t.lock_side('Right')
