@@ -31,7 +31,7 @@ for entry in (resources/'Runtime/bin').iterdir():
     if entry.is_symlink() and entry.readlink().is_absolute():
         resolved=entry.resolve();entry.unlink();shutil.copy2(resolved,entry)
 subprocess.run(['/usr/bin/swiftc',str(ROOT/'Native/AirControl.swift'),'-framework','AppKit','-framework','AVFoundation','-o',str(macos/'AirControl')],check=True)
-info=dict(CFBundleName='AirControl',CFBundleDisplayName='AirControl',CFBundleIdentifier='local.aircontrol.desktop',CFBundleExecutable='AirControl',CFBundlePackageType='APPL',CFBundleShortVersionString='1.2.1',CFBundleVersion='5',CFBundleIconFile='AirControl.icns',NSCameraUsageDescription='Распознавать движения рук и выбранный предмет для управления компьютером. Кадры обрабатываются локально.',NSHighResolutionCapable=True)
+info=dict(CFBundleName='AirControl',CFBundleDisplayName='AirControl',CFBundleIdentifier='local.aircontrol.desktop',CFBundleExecutable='AirControl',CFBundlePackageType='APPL',CFBundleShortVersionString='1.3.0',CFBundleVersion='6',CFBundleIconFile='AirControl.icns',NSCameraUsageDescription='Распознавать движения рук и выбранный предмет для управления компьютером. Кадры обрабатываются локально.',NSHighResolutionCapable=True)
 with (bundle/'Contents/Info.plist').open('wb') as handle:plistlib.dump(info,handle)
 # Render the code-native icon using Qt; no image-generation dependency.
 from PyQt6.QtCore import Qt
@@ -48,5 +48,10 @@ for size in (16,32,128,256,512):
         painter=QPainter(image);renderer.render(painter);painter.end()
         image.save(str(iconset/f'icon_{size}x{size}{"@2x" if scale==2 else ""}.png'))
 subprocess.run(['/usr/bin/iconutil','-c','icns',str(iconset),'-o',str(resources/'AirControl.icns')],check=True)
+sys_path = str(ROOT/'Source')
+import sys
+sys.path.insert(0, sys_path)
+from core.room_app_identity import prepare_host
+prepare_host(resources/'Runtime', 'AirControl', 'local.aircontrol.desktop.interface', resources/'AirControl.icns')
 subprocess.run(['/usr/bin/codesign','--force','--sign','-',str(bundle)],check=True)
 print(bundle)

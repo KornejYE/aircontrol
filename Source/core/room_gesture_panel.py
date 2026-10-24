@@ -237,8 +237,18 @@ class GestureController(QObject):
    self._last_media_id=event_id
    if not self.ready or self.process is None or self._calibrating or not self.current_profile_event(data):return
    if data.get('mode',self.effective_mode)!=self.effective_mode:return
+   pair_zoom=data.get('gesture')=='two_hand_zoom'
+   if pair_zoom:
+    captured=data.get('captured_monotonic')
+    if (action not in ('zoom_in','zoom_out') or self.effective_mode=='joystick'
+        or type(captured) not in (int,float) or not math.isfinite(captured)
+        or not 0<=time.monotonic()-captured<=.30):return
+    if self.effective_mode=='system_mouse' and self._pointer_native and self._pointer_native.check_escape():return
    try:
-    if 'swipe_steps' in data:
+    if pair_zoom and self.effective_mode=='system_mouse':
+     from core.room_media_keys import dispatch_action
+     dispatch_action(action)
+    elif 'swipe_steps' in data:
      count=data['swipe_steps'];captured=data.get('captured_monotonic')
      if (self.effective_mode!='discrete' or action not in ('up','down','left','right','volume_up','volume_down')
          or data.get('continuous') is True or type(count) is not int or not 1<=count<=4
@@ -262,7 +272,7 @@ class GestureController(QObject):
     else:
      from core.room_media_keys import dispatch_action
      dispatch_action(action)
-    side='Правая' if data.get('hand')=='Right' else 'Левая'
+    side='Обе руки' if pair_zoom else 'Правая' if data.get('hand')=='Right' else 'Левая'
     self.last_gesture=side+' · '+ACTIONS[action]
    except Exception as error:self.last_gesture='Не удалось выполнить: '+str(error)
   elif kind=='media':
@@ -484,6 +494,13 @@ QSlider::groove:horizontal{{height:6px;background:#163d49;border-radius:3px;}} Q
   mouse_precision=QCheckBox('Точное наведение на малой скорости');mouse_precision.setChecked(self.bindings.get('mouse_precision',True));mouse_precision.setToolTip('Медленные движения уменьшают чувствительность до 30%. При обычном движении возвращается выбранная скорость. Отдельно от ускорения; перетаскивание и прокрутка не меняются.');box.addWidget(mouse_precision)
   self.mouse_hand=hand_choice;self.mouse_position=positioning;self.mouse_speed=mouse_speed;self.mouse_acceleration=mouse_acceleration;self.mouse_precision=mouse_precision
   box.removeWidget(pointer_note);box.addWidget(pointer_note)
+  two_hand_zoom=QCheckBox('Масштабировать двумя руками');two_hand_zoom.setChecked(self.bindings.get('two_hand_zoom',True));two_hand_zoom.setToolTip('Захватите воздух обеими руками. Разведите кисти для увеличения, сблизьте для уменьшения. Пока оба захвата удерживаются, курсор и прокрутка приостановлены.');box.addWidget(two_hand_zoom)
+  pair_step=QSlider(Qt.Orientation.Horizontal);pair_step.setRange(6,35);pair_step.setValue(round(self.bindings.get('two_hand_zoom_step',.12)*100));pair_step.setAccessibleName('Размах масштабирования двумя руками')
+  pair_value=QLabel('Изменение расстояния на один шаг масштаба · '+str(pair_step.value())+'%');box.addWidget(pair_value);box.addWidget(pair_step)
+  self.two_hand_zoom=two_hand_zoom;self.two_hand_zoom_step=pair_step
+  def pair_settings():
+   config=read_settings(path);config['two_hand_zoom']=two_hand_zoom.isChecked();config['two_hand_zoom_step']=pair_step.value()/100;self.bindings.update(two_hand_zoom=config['two_hand_zoom'],two_hand_zoom_step=config['two_hand_zoom_step']);save_settings(path,config);pair_value.setText('Изменение расстояния на один шаг масштаба · '+str(pair_step.value())+'%');self.controller.reload_rules()
+  two_hand_zoom.toggled.connect(pair_settings);pair_step.valueChanged.connect(pair_settings)
   def pointer_settings():
    speed_value.setText('Скорость курсора · '+str(mouse_speed.value()/10)+' ×')
    config=read_settings(path);config['mouse_hand']=hand_choice.currentData();config['mouse_speed']=mouse_speed.value()/10;config['mouse_position']=positioning.currentData();config['mouse_acceleration']=mouse_acceleration.isChecked();config['mouse_precision']=mouse_precision.isChecked();self.bindings.update(mouse_hand=config['mouse_hand'],mouse_speed=config['mouse_speed'],mouse_position=config['mouse_position'],mouse_acceleration=config['mouse_acceleration'],mouse_precision=config['mouse_precision']);save_settings(path,config);self.controller.reload_rules()
@@ -506,9 +523,10 @@ QSlider::groove:horizontal{{height:6px;background:#163d49;border-radius:3px;}} Q
    tabs.addTab(page,title)
   def defaults():
    self.bindings=settings();swap.blockSignals(True);swap.setChecked(False);swap.blockSignals(False)
-   for control,update in [(hand_choice,lambda:hand_choice.setCurrentIndex(0)),(positioning,lambda:positioning.setCurrentIndex(0)),(mouse_speed,lambda:mouse_speed.setValue(15)),(mouse_acceleration,lambda:mouse_acceleration.setChecked(False)),(mouse_precision,lambda:mouse_precision.setChecked(True))]:
+   for control,update in [(hand_choice,lambda:hand_choice.setCurrentIndex(0)),(positioning,lambda:positioning.setCurrentIndex(0)),(mouse_speed,lambda:mouse_speed.setValue(15)),(mouse_acceleration,lambda:mouse_acceleration.setChecked(False)),(mouse_precision,lambda:mouse_precision.setChecked(True)),(two_hand_zoom,lambda:two_hand_zoom.setChecked(True)),(pair_step,lambda:pair_step.setValue(12))]:
     control.blockSignals(True);update();control.blockSignals(False)
    speed_value.setText('Скорость курсора · 1.5 ×')
+   pair_value.setText('Изменение расстояния на один шаг масштаба · 12%')
    self.mode_combo.blockSignals(True);self.mode_combo.setCurrentIndex(0);self.mode_combo.blockSignals(False)
    for hand,event,combo in self.binding_combos:
     combo.blockSignals(True);combo.setCurrentIndex(combo.findData(self.bindings['rules'][hand][event]));combo.blockSignals(False)

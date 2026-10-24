@@ -1,5 +1,14 @@
 # Changes
 
+## 1.3.0 — 2026-10-24
+
+- The macOS interface runs in its own named AirControl bundle instead of appearing as Python, retaining the existing virtual environment and native launcher.
+
+- Added two-hand grip zoom: spreading the selected right and left hands zooms in; bringing them together zooms out. Common camera-depth changes are normalized by palm size.
+- The two-hand clutch suppresses single-hand pointer/scroll actions and requires both grips to release after loss or a hand-identity change. Joystick mode keeps its existing behavior.
+- Added an opt-out, movement sensitivity and two text-only gesture-guide entries. System-mouse zoom targets the foreground app; browser-mode zoom retains the selected-tab route.
+- macOS zoom shortcuts use native keyboard events with release cleanup, removing the missing PyAutoGUI dependency on that path. Tests use synthetic landmarks, real worker replay and fake native event sinks.
+
 ## 1.2.1 — 2026-10-24
 
 - Added an adaptive positional tether after coordinate smoothing to suppress stationary hand-landmark jitter without rounding away every small movement.

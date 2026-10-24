@@ -2,7 +2,7 @@
 import json, math
 from pathlib import Path
 from core.room_gesture_engine import GestureEngine
-from core.room_gesture_zoom import PinchZoom
+from core.room_gesture_zoom import PinchZoom,TwoHandZoom
 from core.room_gesture_analog import AnalogDrag,ViewportDrag,command
 
 ACTIONS = {'none':'Ничего', 'up':'Следующее Shorts / прокрутить вниз',
@@ -34,6 +34,8 @@ def settings(value=None):
   'mouse_position':'absolute' if value.get('mouse_position')=='absolute' else 'relative',
   'mouse_acceleration':value.get('mouse_acceleration') is True,
   'mouse_precision':value.get('mouse_precision',True) is not False,
+  'two_hand_zoom':value.get('two_hand_zoom',True) is not False,
+  'two_hand_zoom_step':max(.06,min(.35,value.get('two_hand_zoom_step',.12))) if type(value.get('two_hand_zoom_step',.12)) in (int,float) and math.isfinite(value.get('two_hand_zoom_step',.12)) else .12,
   'mouse_speed':max(.5,min(3.,value.get('mouse_speed',1.5))) if type(value.get('mouse_speed',1.5)) in (int,float) and math.isfinite(value.get('mouse_speed',1.5)) else 1.5,
  'mouse_hand':'Left' if value.get('mouse_hand')=='Left' else 'Right',
  'analog_span':max(.12,min(.60,span)),
@@ -99,6 +101,7 @@ class HandRules:
   from core.room_air_mouse import AirMouse
   from core.room_hand_joystick import HandJoystick
   self.mouse=AirMouse()
+  self.pair_zoom=TwoHandZoom();self._pair_blocked=False
   self.joystick=HandJoystick()
   self.config=settings();self.engines={h:GestureEngine(distance=distance,profile=profile,relative_floor=0.) for h in ('Right','Left')}
   self.zoom={h:PinchZoom() for h in self.engines};self.states={h:{} for h in self.engines};self.feedback={};self.last_hand=''
@@ -111,6 +114,23 @@ class HandRules:
  def take_pending(self):
   pending,self._pending=self._pending,[]
   return pending
+ def update_pair(self,tracked,now,*,identities=None,allow_actions=True):
+  """Return None for ordinary hand routing, or exclusive pair actions."""
+  if not self.config['two_hand_zoom'] or self.config['mode']=='joystick':
+   self.pair_zoom.reset();self._pair_blocked=False;return None
+  if not allow_actions:self.pair_zoom.interrupt()
+  zooms=self.pair_zoom.update(tracked if allow_actions else [],now,identities=identities,step=self.config['two_hand_zoom_step'])
+  if not self.pair_zoom.consume:self._pair_blocked=False;return None
+  actions=[]
+  if not self._pair_blocked:
+   for packet in self.mouse.cancel():actions.append((self.config['mouse_hand'],'pointer',packet))
+   for hand,engine in self.engines.items():
+    actions.extend(self._finish_scroll(hand));engine.reset();engine.require_media_release()
+    self.states[hand]={};self.zoom[hand].reset();self.analog[hand].reset();self.stepped[hand].reset()
+   self._pair_blocked=True
+  self.feedback=dict(side='Обе руки',grip=self.pair_zoom.engaged,phase=self.pair_zoom.feedback)
+  actions.extend(('Both','two_hand_zoom',action) for action in zooms)
+  return actions
  def set_distance(self,value):
   if type(value) not in (int,float) or not math.isfinite(value):return
   distance=max(.04,min(.2,value))
@@ -123,6 +143,7 @@ class HandRules:
  def configure(self,value):
   updated=settings(value)
   if updated==self.config:return
+  self.pair_zoom.reset();self._pair_blocked=False
   for packet in self.mouse.cancel():self._pending.append((self.config['mouse_hand'],'pointer',packet))
   if self.config['mode']=='joystick':self._pending.append((self.config['joystick']['hand'],'joystick',self.joystick.cancel()))
   else:self.joystick.reset()

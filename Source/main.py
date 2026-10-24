@@ -1,4 +1,6 @@
 """AirControl: an independent local gesture controller."""
+from core.room_app_identity import reexec_named_host
+reexec_named_host("AirControl", "AIRCONTROL_APP")
 import argparse
 import base64
 import os
@@ -17,7 +19,7 @@ from core.room_gesture_panel import install_controller,open_panel
 from core.room_settings_shell import STYLE
 
 ROOT=Path(__file__).resolve().parents[1]
-APP_VERSION='1.2.1'
+APP_VERSION='1.3.0'
 
 class Preview(QLabel):
     def __init__(self):

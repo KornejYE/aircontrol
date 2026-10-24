@@ -193,17 +193,21 @@ def main():
     if cycle-last_rules>1:
      reload_rules();last_rules=cycle
     actions=router.take_pending();seen=set();feedbacks=[]
-    for side,landmarks in tracked:
+    pair_actions=router.update_pair(tracked,captured,identities=tracks.selected_ids,allow_actions=calibration is None and 0<=detect_end-captured<=.25)
+    if pair_actions is not None:actions.extend(pair_actions);feedbacks.append(dict(router.feedback))
+    for side,landmarks in ([] if pair_actions is not None else tracked):
      seen.add(side)
      fresh=router.config['mode']=='discrete' or 0<=detect_end-captured<=.25
      action=router.update(landmarks,captured,side,allow_actions=calibration is None and fresh)
      feedbacks.append(dict(router.feedback))
      if action:actions.extend(action if isinstance(action,list) else [action])
     for side in ('Right','Left'):
-     if side not in seen:
+     if pair_actions is None and side not in seen:
       action=router.update(None,captured,side,allow_actions=calibration is None)
       if action:actions.extend(action if isinstance(action,list) else [action])
-    if router.config['mode'] in ('mouse','system_mouse'):
+    if router.pair_zoom.engaged:
+     tracks.lock_side('Right');tracks.lock_side('Left')
+    elif router.config['mode'] in ('mouse','system_mouse'):
      if router.mouse.point_ready:
       source_side=router.config['mouse_hand']
       if router.config['swap_hands']:source_side='Left' if source_side=='Right' else 'Right'

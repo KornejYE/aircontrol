@@ -120,11 +120,19 @@ def _load_macos_api():
     # This checks existing permission without opening a prompt or changing it.
     quartz.CGPreflightPostEventAccess.argtypes = []
     quartz.CGPreflightPostEventAccess.restype = ctypes.c_bool
+    quartz.CGEventCreateKeyboardEvent.argtypes = [pointer, ctypes.c_uint16, ctypes.c_bool]
+    quartz.CGEventCreateKeyboardEvent.restype = pointer
+    quartz.CGEventSetFlags.argtypes = [pointer, ctypes.c_uint64]
+    quartz.CGEventSetFlags.restype = None
+    foundation = ctypes.CDLL('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation')
+    foundation.CFRelease.argtypes = [pointer]
+    foundation.CFRelease.restype = None
     return SimpleNamespace(
         get_class=objc.objc_getClass, selector=objc.sel_registerName,
         message=message, drain=drain, make_event=make_event,
         preflight=quartz.CGPreflightPostEventAccess, post=quartz.CGEventPost,
-        libraries=(appkit, quartz, objc),
+        create_key=quartz.CGEventCreateKeyboardEvent, flags=quartz.CGEventSetFlags,
+        release_event=foundation.CFRelease, libraries=(appkit, quartz, objc, foundation),
     )
 
 
@@ -188,8 +196,40 @@ def toggle_play_pause() -> str:
     return "Системная медиаклавиша Play/Pause отправлена."
 
 
+def _send_macos_zoom(action):
+    api = _load_macos_api()
+    if not api.preflight():
+        raise MediaKeyError('Разрешите управление приложением в macOS → Конфиденциальность → Универсальный доступ.')
+    key = 24 if action == 'zoom_in' else 27  # ANSI equal / minus
+    events = []
+    completed = False
+    try:
+        for code, down, flags in ((55, True, 1 << 20), (key, True, 1 << 20),
+                                  (key, False, 1 << 20), (55, False, 0)):
+            event = api.create_key(None, code, down)
+            if not event:
+                raise MediaKeyError('Не удалось создать клавишу масштабирования.')
+            events.append(event)
+            api.flags(event, flags)
+        try:
+            for event in events:
+                api.post(0, event)
+            completed = True
+        finally:
+            if not completed:
+                # Best-effort releases only; never replay a failed key-down.
+                for event in events[2:]:
+                    try:api.post(0, event)
+                    except Exception:pass
+    finally:
+        for event in events:api.release_event(event)
+
+
 def dispatch_action(action):
     if action in ('zoom_in', 'zoom_out'):
+        if sys.platform == 'darwin':
+            _send_macos_zoom(action)
+            return
         import pyautogui
         pyautogui.hotkey('command' if sys.platform == 'darwin' else 'ctrl', '=' if action == 'zoom_in' else '-')
         return

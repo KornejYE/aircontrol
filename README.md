@@ -15,6 +15,7 @@ AirControl is a standalone desktop application with local hand tracking, configu
 - **Discrete gestures:** short movements perform one action; longer movements perform several.
 - **Analog control:** drag a page or video feed continuously, similar to a touchscreen.
 - **Media gestures:** open-palm play/pause, volume, seeking and pinch zoom.
+- **Two-hand zoom:** grip with thumb/index on both hands (optionally including the middle finger), then spread or bring the hands together. Release both grips to rearm. The mouse settings include an opt-out and movement sensitivity; system-mouse mode uses the foreground app's zoom shortcuts, while browser mode targets the selected tab.
 - **Per-hand configuration:** separate left/right bindings, movement span, cursor speed and optional acceleration.
 - **Visible tracking:** 21 landmarks per detected hand and a palm center. Up to eight hands can be displayed; the largest right and left hands control gestures.
 - **Searchable settings**, a text gesture reference and optional background operation from the menu bar.

@@ -50,6 +50,12 @@ INSTRUCTIONS = {
 
 
 def explanation(event):
+    if event in ('both_spread','both_close'):
+        spread=event=='both_spread'
+        return ('Обе руки · '+('увеличение' if spread else 'уменьшение'),
+                'Покажите обе руки и на каждой сомкните большой и указательный пальцы. Можно также присоединить средний палец.',
+                ('Разводите кисти в стороны' if spread else 'Сближайте кисти')+' одновременно, удерживая оба захвата. Камера должна видеть обе кисти.',
+                'Неподвижные руки масштаб не меняют. Разожмите пальцы на обеих руках перед новым жестом. В режиме мыши для всего Mac изменяется масштаб активного приложения, в браузерном режиме — выбранной вкладки.')
     if event.startswith('zoom_'):
         spread = event == 'zoom_spread'
         return ('Развести два пальца' if spread else 'Свести два пальца',
@@ -86,7 +92,8 @@ class GestureGuide(QWidget):
         self.list.setAccessibleName('Все доступные жесты')
         self.list.setWordWrap(True)
         self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        for event,title in EVENTS.items():
+        from core.room_gesture_zoom import BIMANUAL_EVENTS
+        for event,title in {**EVENTS,**BIMANUAL_EVENTS}.items():
             item = QListWidgetItem(title)
             item.setData(Qt.ItemDataRole.UserRole,event)
             self.list.addItem(item)
@@ -171,6 +178,14 @@ class GestureGuide(QWidget):
         event = item.data(Qt.ItemDataRole.UserRole)
         title,shape,motion,repeat = explanation(event)
         self.title.setText(title)
+        both=event in ('both_spread','both_close')
+        self.hand.setEnabled(not both)
+        if both:
+            self.motion_hint.setText('Два захвата · разведите или сблизьте обе кисти')
+            for widget,text in zip(self.instructions,(shape,motion,repeat)):widget.setText(text)
+            cfg=read_settings(DATA_DIR/'config/gesture-actions.json')
+            self.assignment.setText('Обе руки · '+('масштабирование включено' if cfg['two_hand_zoom'] else 'масштабирование выключено в настройках мыши'))
+            return
         if event.startswith('zoom_'):
             hint = 'Двигайте два пальца; кисть держите на месте'
         elif event.endswith('_hold'):
