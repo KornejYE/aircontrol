@@ -73,6 +73,7 @@ class GestureController(QObject):
   try:self.worker_command(command)
   except Exception as error:self.status='Режим браузера не применён: '+str(error)
  def current_profile_event(self,data):
+  if getattr(self,'_pointer_setup',False):return False
   if self.relay is not None and self.relay.browser_profile()['revision']!=self._browser_revision:return False
   return self._worker_profile_ready and (self._browser_revision==0 or data.get('profile_revision')==self._browser_revision)
  def ensure_relay(self):
@@ -126,7 +127,7 @@ class GestureController(QObject):
     if epoch!=self.epoch:break
     try:data=json.loads(line)
     except ValueError:continue
-    if data.get('type')=='gesture' and data.get('direction') in ('up','down','left','right'):relay.publish(data['direction'])
+    if not getattr(self,'_pointer_setup',False) and data.get('type')=='gesture' and data.get('direction') in ('up','down','left','right'):relay.publish(data['direction'])
     data['_epoch']=epoch;data['_received_monotonic']=time.monotonic();self.message.emit(data)
    process.wait()
    if epoch==self.epoch:self.message.emit({'type':'ended','text':'Камера остановлена. Подробности: camera.log.','_epoch':epoch})
@@ -134,6 +135,7 @@ class GestureController(QObject):
  def receive(self,data):
   if data.get('_epoch',self.epoch)!=self.epoch:return
   kind=data.get('type')
+  if getattr(self,'_pointer_setup',False) and kind in ('pointer','action','media','drag_scroll','gesture'):return
   if kind in ('action','media','drag_scroll') and '_received_monotonic' in data:
    received=data['_received_monotonic']
    if not isinstance(received,(int,float)) or not 0<=time.monotonic()-received<=1.2:return
@@ -224,6 +226,8 @@ class GestureController(QObject):
       from core.room_air_mouse_native import NativeAirMouse
       from core.room_pointer_motion import PointerMotion
       self._pointer_native=NativeAirMouse()
+      from core.room_gesture_rules import read_settings
+      self._pointer_native.set_display_target(read_settings(DATA_DIR/'config/gesture-actions.json')['mouse_display'])
       self._pointer_motion=PointerMotion(self._pointer_native.send)
      self._pointer_motion.submit(packet)
      if self._pointer_motion.pending and not self._pointer_timer.isActive():self._pointer_timer.start()
@@ -360,7 +364,9 @@ class GestureController(QObject):
   self._drag_stream=None;self._drag_seen.clear();self._drag_after=time.monotonic();self._drag_captured=self._drag_after
  def reload_rules(self):
   from core.room_gesture_rules import read_settings
-  self.game_config=read_settings(DATA_DIR/'config/gesture-actions.json')['joystick']
+  config=read_settings(DATA_DIR/'config/gesture-actions.json')
+  self.game_config=config['joystick']
+  if self._pointer_native:self._pointer_native.set_display_target(config['mouse_display'])
   self.release_game()
   self.release_pointer();self._clear_drag()
   if self.relay:self.relay.invalidate()
@@ -489,6 +495,26 @@ QSlider::groove:horizontal{{height:6px;background:#163d49;border-radius:3px;}} Q
   pointer_note=QLabel('Мышь рукой: указательный — курсор; большой + указательный — клик или выделение. Сведите большой, указательный и средний и ведите кисть вверх/вниз, чтобы прокручивать как пальцем по экрану. Два вытянутых пальца тоже прокручивают. Большой и средний вместе, указательный вытянут — правый клик. Кулак отпускает кнопку; Esc останавливает. Ускорение выключено по умолчанию; его можно включить флажком «Ускорять курсор». Если расширение активно, выбирайте режим в его меню ⋯.');pointer_note.setWordWrap(True);box.addWidget(pointer_note)
   hand_choice=QComboBox();hand_choice.setAccessibleName('Управляющая рука для мыши');hand_choice.addItem('Мышь · правая рука','Right');hand_choice.addItem('Мышь · левая рука','Left');hand_choice.setCurrentIndex(hand_choice.findData(self.bindings.get('mouse_hand','Right')));box.addWidget(hand_choice)
   positioning=QComboBox();positioning.setAccessibleName('Способ позиционирования мыши рукой');positioning.addItem('Как тачпад · относительное движение','relative');positioning.addItem('Как указатель · прямое наведение','absolute');positioning.setCurrentIndex(positioning.findData(self.bindings.get('mouse_position','relative')));box.addWidget(positioning)
+  from core.room_pointer_area import display_options
+  area_button=QPushButton('Выбрать поле на изображении камеры…');area_button.setMinimumHeight(42);area_button.setAccessibleName('Настроить границы прямого наведения');box.addWidget(area_button);self.mouse_area_button=area_button
+  area_summary=QLabel();area_summary.setWordWrap(True);box.addWidget(area_summary)
+  def update_area_summary():
+   l,t,r,b=self.bindings['mouse_area'];area_summary.setText(f'Поле камеры: лево {l:.0%}, верх {t:.0%}, право {r:.0%}, низ {b:.0%}. Применяется только к прямому наведению.')
+  self.update_pointer_area_summary=update_area_summary;update_area_summary()
+  def choose_area():
+   from core.room_pointer_area_picker import pick_pointer_area
+   pick_pointer_area(self)
+  area_button.clicked.connect(choose_area)
+  display_choice=QComboBox();display_choice.setAccessibleName('Экраны для прямого наведения');display_choice.addItem('Все экраны · единый рабочий стол','all');display_choice.addItem('Экран, на котором находится курсор','current')
+  options=display_options()
+  for key,title,geometry in options:display_choice.addItem(title,key)
+  selected=display_choice.findData(self.bindings['mouse_display'])
+  if selected<0:display_choice.addItem('Выбранный экран отключён · пока все экраны',self.bindings['mouse_display']);selected=display_choice.count()-1
+  display_choice.setCurrentIndex(selected);box.addWidget(display_choice);self.mouse_display=display_choice
+  display_note=QLabel('Только системное прямое наведение. Мышь в браузере остаётся внутри выбранной страницы.'+(' Слева направо: '+'; '.join(item[1] for item in options)+'.' if options else ''));display_note.setWordWrap(True);box.addWidget(display_note)
+  def display_changed():
+   config=read_settings(path);config['mouse_display']=display_choice.currentData();self.bindings['mouse_display']=config['mouse_display'];save_settings(path,config);self.controller.reload_rules()
+  display_choice.currentIndexChanged.connect(display_changed)
   mouse_speed=QSlider(Qt.Orientation.Horizontal);mouse_speed.setRange(5,30);mouse_speed.setValue(round(self.bindings.get('mouse_speed',1.5)*10));mouse_speed.setAccessibleName('Скорость мыши рукой');speed_value=QLabel('Скорость курсора · '+str(mouse_speed.value()/10)+' ×');box.addWidget(speed_value);box.addWidget(mouse_speed)
   mouse_acceleration=QCheckBox('Ускорять курсор при быстрых движениях');mouse_acceleration.setChecked(self.bindings.get('mouse_acceleration',False));mouse_acceleration.setToolTip('Выключено по умолчанию. Только относительное наведение. Перетаскивание и прокрутка остаются линейными.');box.addWidget(mouse_acceleration)
   mouse_precision=QCheckBox('Точное наведение на малой скорости');mouse_precision.setChecked(self.bindings.get('mouse_precision',True));mouse_precision.setToolTip('Медленные движения уменьшают чувствительность до 30%. При обычном движении возвращается выбранная скорость. Отдельно от ускорения; перетаскивание и прокрутка не меняются.');box.addWidget(mouse_precision)
@@ -523,8 +549,9 @@ QSlider::groove:horizontal{{height:6px;background:#163d49;border-radius:3px;}} Q
    tabs.addTab(page,title)
   def defaults():
    self.bindings=settings();swap.blockSignals(True);swap.setChecked(False);swap.blockSignals(False)
-   for control,update in [(hand_choice,lambda:hand_choice.setCurrentIndex(0)),(positioning,lambda:positioning.setCurrentIndex(0)),(mouse_speed,lambda:mouse_speed.setValue(15)),(mouse_acceleration,lambda:mouse_acceleration.setChecked(False)),(mouse_precision,lambda:mouse_precision.setChecked(True)),(two_hand_zoom,lambda:two_hand_zoom.setChecked(True)),(pair_step,lambda:pair_step.setValue(12))]:
+   for control,update in [(hand_choice,lambda:hand_choice.setCurrentIndex(0)),(positioning,lambda:positioning.setCurrentIndex(0)),(mouse_speed,lambda:mouse_speed.setValue(15)),(mouse_acceleration,lambda:mouse_acceleration.setChecked(False)),(mouse_precision,lambda:mouse_precision.setChecked(True)),(two_hand_zoom,lambda:two_hand_zoom.setChecked(True)),(pair_step,lambda:pair_step.setValue(12)),(display_choice,lambda:display_choice.setCurrentIndex(0))]:
     control.blockSignals(True);update();control.blockSignals(False)
+   update_area_summary()
    speed_value.setText('Скорость курсора · 1.5 ×')
    pair_value.setText('Изменение расстояния на один шаг масштаба · 12%')
    self.mode_combo.blockSignals(True);self.mode_combo.setCurrentIndex(0);self.mode_combo.blockSignals(False)

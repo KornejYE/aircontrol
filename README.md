@@ -112,3 +112,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the layout and focused checks. Bug re
 The project retains the original **Creative Commons Attribution–NonCommercial 4.0** license. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for authorship, origin and modifications. This is a public source project for **non-commercial use**, not a permissively licensed commercial SDK.
 
 Original MARK LV — JARVIS: [FatihMakes](https://github.com/FatihMakes/Mark-LV). The hand model and dependencies retain their own terms; their sources are listed in [NOTICE.md](NOTICE.md) and [Models/gestures/UPSTREAM.txt](Models/gestures/UPSTREAM.txt).
+
+Absolute pointing: open Settings → Mouse and cursor → Choose camera area. Resize/move the rectangle or draw a new one outside it, then save. The area maps to all monitors by default; the display selector can target one monitor. Relative pointing does not use this camera rectangle.

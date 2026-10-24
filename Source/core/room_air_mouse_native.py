@@ -17,6 +17,11 @@ def trusted_access():
  return bool(library.AXIsProcessTrusted())
 class NativeAirMouse:
  def __init__(self):self.q=None;self.previous=None;self.location=None;self.scale=None;self.recent=deque(maxlen=32);self.down=False;self.paused_until=0.;self.last_click=0.;self.click_count=0;self.scroll_remainder=0.;self.physical_pauses=0
+ def set_display_target(self,target):
+  from core.room_pointer_area import display_target
+  target=display_target(target)
+  if target!=getattr(self,'display_target','all'):self.cancel()
+  self.display_target=target
  def cancel(self):
   try:
    if self.q and self.down and self.location is not None:
@@ -52,7 +57,12 @@ class NativeAirMouse:
    _,displays,_=q.CGGetActiveDisplayList(16,None,None)
    bounds=next((q.CGDisplayBounds(d) for d in displays if q.CGRectContainsPoint(q.CGDisplayBounds(d),self.location)),q.CGDisplayBounds(q.CGMainDisplayID()))
    if data.get('absolute'):
-    self.location=(bounds.origin.x+xy[0]*(bounds.size.width-1),bounds.origin.y+xy[1]*(bounds.size.height-1));dx=dy=0.
+    from core.room_pointer_area import absolute_desktop_point
+    target=getattr(self,'display_target','all')
+    selected=([bounds] if target=='current' else
+              [q.CGDisplayBounds(d) for d in displays if target==f'display:{d}'] if target.startswith('display:') else
+              [q.CGDisplayBounds(d) for d in displays]) or [q.CGDisplayBounds(d) for d in displays] or [bounds]
+    self.location=absolute_desktop_point(xy,selected);dx=dy=0.
    else:
     # Keep one scale throughout a stroke; crossing to a different-sized monitor
     # must not suddenly change the cursor's speed.

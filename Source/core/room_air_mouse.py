@@ -94,7 +94,7 @@ class AirMouse:
   self.scroll_lock=True
   self.last_emit=now
   return [self.packet('scroll',dy=0.) if self.pose in ('scroll','scroll_grab') else self.packet('move')]
- def update(self,p,now,*,speed=1.5,flags=None,norm=.2,positioning='relative',acceleration=False,precision=False):
+ def update(self,p,now,*,speed=1.5,flags=None,norm=.2,positioning='relative',acceleration=False,precision=False,area=None):
   try:
    if not math.isfinite(now):raise ValueError()
    if p is None:return self.missing(now)
@@ -103,7 +103,9 @@ class AirMouse:
    if self.last is not None and not 0<=now-self.last<=(.25 if recovered else .20):
     self.diagnostics['time_gaps']+=1
     packets=self.cancel()
-    return packets+self.update(p,now,speed=speed,flags=flags,norm=norm,positioning=positioning,acceleration=acceleration,precision=precision)
+    return packets+self.update(p,now,speed=speed,flags=flags,norm=norm,positioning=positioning,acceleration=acceleration,precision=precision,area=area)
+   from core.room_pointer_area import pointer_area,map_point
+   area=pointer_area(area)
    self.absolute=positioning=='absolute'
    flags=flags or {};norm=max(.025,norm)
    extended=[math.dist(p[t],p[0])>math.dist(p[t-2],p[0])*1.12 for t in (8,12,16,20)]
@@ -177,7 +179,7 @@ class AirMouse:
     if pose in ('scroll','scroll_grab'):self.point_ready=False;self.pinch_allowed=False;self.scroll_lock=True
     if pose=='point':
      self.point_ready=not self.scroll_lock
-     if self.absolute and not releasing:self.xy=[max(0.,min(1.,(v-.15)/.7)) for v in pos]
+     if self.absolute and not releasing:self.xy=map_point(pos,area)
     self.pose=pose;self.since=now;self.previous=pos;self.filtered=pos;self.anchor=pos;self.context_fired=False;self.velocity=0.;self.trend=(0.,0.);self.scroll_pending=0.
     packets.append(self.packet('move'));self.last_emit=now;return packets
    dx,dy=pos[0]-self.previous[0],pos[1]-self.previous[1]
@@ -230,8 +232,8 @@ class AirMouse:
      self.down=True;packets.append(self.packet('down'))
     gain=pointer_gain(speed,precision_speed,False,precision and pose=='point' and not self.absolute)
     if pose=='point' or self.down:
-     step=1/.7 if self.absolute else gain;motion=accelerated if accelerated is not None else (dx*step,dy*step)
-     self.xy=([max(0.,min(1.,(v-.15)/.7)) for v in filtered] if self.absolute and pose=='point' else [max(0.,min(1.,self.xy[a]+motion[a])) for a in (0,1)])
+     motion=accelerated if accelerated is not None else (dx/(area[2]-area[0]),dy/(area[3]-area[1])) if self.absolute else (dx*gain,dy*gain)
+     self.xy=(map_point(filtered,area) if self.absolute and pose=='point' else [max(0.,min(1.,self.xy[a]+motion[a])) for a in (0,1)])
      if not self.absolute:self.relative=[self.relative[a]+motion[a] for a in (0,1)]
     # Even small deliberate movements need one output per detected frame.
     # The former threshold bunched slow travel into 80-ms stair steps.

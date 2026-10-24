@@ -1,5 +1,11 @@
 # Changes
 
+## 1.3.1 — 2026-10-24
+
+- Added a live, mirrored camera-area picker for absolute pointing. Draw, resize or move the rectangle; normalized bounds survive window resizing and are saved locally. Relative pointing retains its existing behavior.
+- Absolute system pointing spans all active monitors by default, including negative origins and different heights. A display selector also offers one specific monitor or the current monitor; unreachable gap pixels are projected onto a real display.
+- Gesture output pauses while choosing the area. Cancel preserves the saved bounds; the camera returns to its previous on/off state. Added geometry, settings, Qt-selection and mocked multi-display regression checks.
+
 ## 1.3.0 — 2026-10-24
 
 - The macOS interface runs in its own named AirControl bundle instead of appearing as Python, retaining the existing virtual environment and native launcher.
