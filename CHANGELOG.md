@@ -1,5 +1,11 @@
 # Changes
 
+## 1.4.0 — Windows preview, 2026-10-24
+
+- Added a Windows x64 native input adapter using ctypes/SendInput, monitor subsets, physical-mouse priority, Esc stop and balanced button/key release. No driver or game-process access is required.
+- Added a per-user installer, verified Python bootstrap, pinned dependencies, model checksum validation, source backups and launch logging. Added a Windows icon and source ZIP packaging.
+- Passed 65 isolated tests on Windows with fake native input. GUI/camera validation is blocked on the test laptop by Smart App Control rejecting Qt/NumPy libraries; this is not a verified ready-to-run Windows release. macOS regression checks passed.
+
 ## 1.3.3 — 2026-10-24
 
 - Redrew the hand icon with four raised fingers and a single thumb; removed the extra side protrusion. The same vector generates the application and macOS bundle icons.

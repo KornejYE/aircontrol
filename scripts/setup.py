@@ -1,4 +1,4 @@
-"""Install the local Mac runtime and a checksum-pinned hand model."""
+"""Install a local runtime and checksum-pinned hand model."""
 import argparse
 import hashlib
 import os
@@ -35,13 +35,16 @@ def download_model(target):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.parse_args()
-    if sys.platform!='darwin':raise SystemExit('This installer currently supports macOS only.')
-    if sys.version_info[:2]!=(3,11):raise SystemExit('Run this installer with Python 3.11: python3.11 scripts/setup.py')
+    if sys.platform not in ('darwin','win32'):raise SystemExit('Supported platforms: macOS and Windows x64.')
+    wanted=(3,13) if sys.platform=='win32' else (3,11)
+    if sys.version_info[:2]!=wanted:raise SystemExit('Use Python '+'.'.join(map(str,wanted)))
     runtime=ROOT/'Runtime'
     venv.EnvBuilder(with_pip=True).create(runtime)
-    subprocess.run([str(runtime/'bin/python'),'-m','pip','install','-r',str(ROOT/'requirements-macos.lock')],check=True)
+    python=runtime/'Scripts/python.exe' if sys.platform=='win32' else runtime/'bin/python'
+    lock='requirements-windows.lock' if sys.platform=='win32' else 'requirements-macos.lock'
+    subprocess.run([str(python),'-m','pip','install','-r',str(ROOT/lock)],check=True)
     download_model(ROOT/'Models/gestures/hand_landmarker.task')
-    print('Ready. Run Runtime/bin/python Source/main.py')
-    print('Build an app with Runtime/bin/python scripts/build_macos.py')
+    print('Ready. Run '+str(python)+' Source/main.py')
+    print('Create the Windows shortcut with windows/Install.cmd' if sys.platform=='win32' else 'Build an app with Runtime/bin/python scripts/build_macos.py')
 
 if __name__=='__main__':main()

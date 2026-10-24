@@ -31,7 +31,7 @@ for entry in (resources/'Runtime/bin').iterdir():
     if entry.is_symlink() and entry.readlink().is_absolute():
         resolved=entry.resolve();entry.unlink();shutil.copy2(resolved,entry)
 subprocess.run(['/usr/bin/swiftc',str(ROOT/'Native/AirControl.swift'),'-framework','AppKit','-framework','AVFoundation','-o',str(macos/'AirControl')],check=True)
-info=dict(CFBundleName='AirControl',CFBundleDisplayName='AirControl',CFBundleIdentifier='local.aircontrol.desktop',CFBundleExecutable='AirControl',CFBundlePackageType='APPL',CFBundleShortVersionString='1.3.3',CFBundleVersion='9',CFBundleIconFile='AirControl.icns',NSCameraUsageDescription='Распознавать движения рук и выбранный предмет для управления компьютером. Кадры обрабатываются локально.',NSHighResolutionCapable=True)
+info=dict(CFBundleName='AirControl',CFBundleDisplayName='AirControl',CFBundleIdentifier='local.aircontrol.desktop',CFBundleExecutable='AirControl',CFBundlePackageType='APPL',CFBundleShortVersionString='1.4.0',CFBundleVersion='10',CFBundleIconFile='AirControl.icns',NSCameraUsageDescription='Распознавать движения рук и выбранный предмет для управления компьютером. Кадры обрабатываются локально.',NSHighResolutionCapable=True)
 with (bundle/'Contents/Info.plist').open('wb') as handle:plistlib.dump(info,handle)
 # Render the code-native icon using Qt; no image-generation dependency.
 from PyQt6.QtCore import Qt

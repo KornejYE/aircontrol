@@ -25,7 +25,7 @@ class Standalone(unittest.TestCase):
   self.directory=tempfile.TemporaryDirectory();self.root=Path(self.directory.name);self.windows=[]
   self.patches=[patch.object(preferences,'DATA_DIR',self.root),patch.object(panel,'DATA_DIR',self.root),
     patch.object(main,'DATA_DIR',self.root),patch.object(panel,'Relay',side_effect=lambda **kw:Relay(port=0)),
-    patch.object(panel.subprocess,'Popen',side_effect=AssertionError('No camera or background subprocess'))]
+    patch.object(panel.subprocess,'Popen',side_effect=AssertionError('No camera or background subprocess')),patch('core.room_game_input.running_games',return_value=[])]
   for p in self.patches:p.start()
  def tearDown(self):
   for window in self.windows:window.controller.shutdown();window.close()

@@ -14,6 +14,9 @@ from core.room_hand_joystick import game_settings, valid_stick
 
 
 def running_games():
+    if sys.platform == 'win32':
+        from core.room_windows_input import WindowsAPI
+        return WindowsAPI().windows()
     if sys.platform != 'darwin':
         return []
     from AppKit import NSWorkspace
@@ -75,8 +78,13 @@ class MacGameAPI:
 class GameInput:
     KEYS = {'left': 0, 'right': 2, 'up': 13, 'down': 1}  # physical A D W S
 
-    def __init__(self, config=None, *, api_factory=MacGameAPI, clock=time.monotonic):
+    def __init__(self, config=None, *, api_factory=None, clock=time.monotonic):
         self.config = game_settings(config)
+        if api_factory is None:
+            if sys.platform == 'win32':
+                from core.room_windows_input import WindowsGameAPI
+                api_factory = WindowsGameAPI
+            else:api_factory = MacGameAPI
         self.factory = api_factory
         self.clock = clock
         self.api = None

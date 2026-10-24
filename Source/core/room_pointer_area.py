@@ -59,11 +59,15 @@ def display_options():
     """Read geometry only; never request permission or post input."""
     try:
         import sys
-        if sys.platform != 'darwin':
+        if sys.platform == 'win32':
+            from core.room_windows_input import WindowsAPI
+            values = WindowsAPI().displays()
+        elif sys.platform == 'darwin':
+            import Quartz as q
+            _, ids, _ = q.CGGetActiveDisplayList(32, None, None)
+            values = [(identifier, q.CGDisplayBounds(identifier)) for identifier in ids]
+        else:
             return []
-        import Quartz as q
-        _, ids, _ = q.CGGetActiveDisplayList(32, None, None)
-        values = [(identifier, q.CGDisplayBounds(identifier)) for identifier in ids]
         values.sort(key=lambda item: (item[1].origin.x, item[1].origin.y))
         return [(f'display:{identifier}', f'Экран {index + 1} · {int(r.size.width)} × {int(r.size.height)}',
                  (r.origin.x, r.origin.y, r.size.width, r.size.height))

@@ -88,3 +88,11 @@ class NativeAirMouse:
    total=self.scroll_remainder-data.get('dy',0)*600
    amount=int(total);self.scroll_remainder=total-amount
    if amount:q.CGEventPost(q.kCGHIDEventTap,q.CGEventCreateScrollWheelEvent(None,q.kCGScrollEventUnitPixel,1,amount))
+
+
+def create_native_pointer():
+ import sys
+ if sys.platform=='win32':
+  from core.room_windows_input import WindowsAirMouse
+  return WindowsAirMouse()
+ return NativeAirMouse()

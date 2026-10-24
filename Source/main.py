@@ -19,7 +19,7 @@ from core.room_gesture_panel import install_controller,open_panel
 from core.room_settings_shell import STYLE
 
 ROOT=Path(__file__).resolve().parents[1]
-APP_VERSION='1.3.3'
+APP_VERSION='1.4.0'
 
 class Preview(QLabel):
     def __init__(self):
@@ -48,7 +48,7 @@ class AirControlWindow(QMainWindow):
         self.start_button=QPushButton('Включить управление');self.start_button.setObjectName('SettingsDone');self.start_button.setMinimumHeight(48);self.start_button.clicked.connect(self.toggle);header.addWidget(self.start_button)
         settings=QPushButton('Настройки');settings.setMinimumHeight(48);settings.clicked.connect(self.settings);header.addWidget(settings);layout.addLayout(header)
         tools=QHBoxLayout();self.mode=QComboBox();self.mode.setAccessibleName('Режим управления');self.mode.setMinimumWidth(330)
-        for text,mode in [('Мышь рукой · весь Mac','system_mouse'),('Обычные жесты','discrete'),('Аналоговая прокрутка','analog'),('Мышь рукой · браузер','mouse'),('Игровой джойстик','joystick')]:self.mode.addItem(text,mode)
+        for text,mode in [('Мышь рукой · весь компьютер' if sys.platform=='win32' else 'Мышь рукой · весь Mac','system_mouse'),('Обычные жесты','discrete'),('Аналоговая прокрутка','analog'),('Мышь рукой · браузер','mouse'),('Игровой джойстик','joystick')]:self.mode.addItem(text,mode)
         self.mode.currentIndexChanged.connect(self.change_mode);tools.addWidget(self.mode)
         self.fps=QLabel('Камера выключена');self.fps.setStyleSheet('color:#a3afb5;font-size:15px;');tools.addWidget(self.fps,1,Qt.AlignmentFlag.AlignRight);layout.addLayout(tools)
         self.preview=Preview();preview_row=QHBoxLayout();preview_row.setSpacing(18);preview_row.addWidget(self.preview,1);layout.addLayout(preview_row,1)
@@ -141,6 +141,9 @@ class AirControlWindow(QMainWindow):
         self.controller.shutdown();event.accept();QApplication.instance().quit()
 
 def main():
+    if sys.platform=='win32':
+        from core.room_windows_input import initialize_windows
+        initialize_windows()
     parser=argparse.ArgumentParser();parser.add_argument('--render-preview',type=Path);args=parser.parse_args()
     DATA_DIR.mkdir(parents=True,exist_ok=True,mode=0o700)
     app=QApplication(sys.argv[:1]);app.setApplicationName('AirControl');app.setOrganizationName('AirControl');app.setApplicationVersion(APP_VERSION);app.setStyleSheet(STYLE);app.setFont(QFont('Arial',16))

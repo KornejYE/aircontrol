@@ -225,14 +225,28 @@ def _send_macos_zoom(action):
         for event in events:api.release_event(event)
 
 
+def _send_windows_zoom(action):
+    from core.room_windows_input import WindowsAPI
+    api=WindowsAPI();key=0xBB if action=='zoom_in' else 0xBD
+    control_owned=not bool(api.u.GetAsyncKeyState(0x11)&0x8000)
+    try:
+        if control_owned:api.key(0x11,True)
+        api.key(key,True)
+    finally:
+        try:api.key(key,False)
+        finally:
+            if control_owned:api.key(0x11,False)
+
+
 def dispatch_action(action):
     if action in ('zoom_in', 'zoom_out'):
         if sys.platform == 'darwin':
             _send_macos_zoom(action)
             return
-        import pyautogui
-        pyautogui.hotkey('command' if sys.platform == 'darwin' else 'ctrl', '=' if action == 'zoom_in' else '-')
-        return
+        if sys.platform == 'win32':
+            _send_windows_zoom(action)
+            return
+        raise MediaKeyError('Масштабирование поддерживается на macOS и Windows.')
     keys = {'play_pause': (16, 0xB3), 'volume_up': (0, 0xAF),
             'volume_down': (1, 0xAE), 'mute': (7, 0xAD),
             'next_track': (17, 0xB0), 'previous_track': (18, 0xB1)}

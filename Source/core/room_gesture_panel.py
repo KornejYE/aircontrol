@@ -223,9 +223,9 @@ class GestureController(QObject):
      if self.relay:self.relay.publish_pointer(packet)
     else:
      if self._pointer_native is None:
-      from core.room_air_mouse_native import NativeAirMouse
+      from core.room_air_mouse_native import create_native_pointer
       from core.room_pointer_motion import PointerMotion
-      self._pointer_native=NativeAirMouse()
+      self._pointer_native=create_native_pointer()
       from core.room_gesture_rules import read_settings
       self._pointer_native.set_display_target(read_settings(DATA_DIR/'config/gesture-actions.json')['mouse_display'])
       self._pointer_motion=PointerMotion(self._pointer_native.send)
@@ -483,7 +483,7 @@ QSlider::groove:horizontal{{height:6px;background:#163d49;border-radius:3px;}} Q
   box=card('Режим управления','Обычный режим выполняет команды махом; аналоговый тянет страницу; мышь управляет курсором.')
   self.bindings_card=box.parentWidget()
   self.mode_combo=QComboBox();self.mode_combo.setAccessibleName('Способ управления жестами')
-  self.mode_combo.addItem('Обычное · длиннее мах — больше роликов','discrete');self.mode_combo.addItem('Аналоговое · тянуть страницу рукой','analog');self.mode_combo.addItem('Мышь рукой · выбранная страница','mouse');self.mode_combo.addItem('Мышь рукой · весь Mac','system_mouse')
+  self.mode_combo.addItem('Обычное · длиннее мах — больше роликов','discrete');self.mode_combo.addItem('Аналоговое · тянуть страницу рукой','analog');self.mode_combo.addItem('Мышь рукой · выбранная страница','mouse');self.mode_combo.addItem('Мышь рукой · весь компьютер' if sys.platform=='win32' else 'Мышь рукой · весь Mac','system_mouse')
   self.mode_combo.addItem('Игровой джойстик · рукой','joystick')
   self.mode_combo.setCurrentIndex(self.mode_combo.findData(self.bindings['mode']));box.addWidget(self.mode_combo)
   note=QLabel('Аналоговое: сомкните пальцы и тяните страницу, как на сенсорном экране. Небольшое движение сдвигает её частично; размах на одно видео задаётся ползунком ниже. Неподвижная кисть не продолжает прокрутку. Влево/вправо — перемотка, левый уголок — громкость. Эти действия идут только в выбранную вкладку расширения, даже во время игры.');note.setWordWrap(True);box.addWidget(note)
