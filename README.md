@@ -114,3 +114,5 @@ The project retains the original **Creative Commons Attribution–NonCommercial 
 Original MARK LV — JARVIS: [FatihMakes](https://github.com/FatihMakes/Mark-LV). The hand model and dependencies retain their own terms; their sources are listed in [NOTICE.md](NOTICE.md) and [Models/gestures/UPSTREAM.txt](Models/gestures/UPSTREAM.txt).
 
 Absolute pointing: open Settings → Mouse and cursor → Choose camera area. Resize/move the rectangle or draw a new one outside it, then save. The area maps to all monitors by default; the display selector can target one monitor. Relative pointing does not use this camera rectangle.
+
+Monitor count: Settings → Mouse and cursor → Choose count and displays. Select a count and the exact monitors. Automatic uses all connected monitors, including newly attached ones; a manual subset retains its chosen monitors.

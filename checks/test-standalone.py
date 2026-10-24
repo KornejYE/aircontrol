@@ -59,6 +59,20 @@ class Standalone(unittest.TestCase):
   saved=json.loads((self.root/'config/gesture-actions.json').read_text());self.assertEqual(saved['mouse_display'],'current')
   self.assertEqual(saved['mouse_area'],[.15,.15,.85,.85])
   view.close()
+ def test_screen_count_dialog_saves_subset_without_starting_camera(self):
+  window=self.window();view=window.settings('mouse')
+  class Selection:
+   def __init__(self,*args):pass
+   def exec(self):return 1
+   def selected_keys(self):return ['display:1','display:3']
+   def target(self):return 'displays:1,3'
+  with patch('core.room_display_picker.DisplayPicker',Selection):view.mouse_displays_button.click()
+  saved=json.loads((self.root/'config/gesture-actions.json').read_text())
+  self.assertEqual(saved['mouse_display'],'displays:1,3')
+  self.assertEqual(view.mouse_display.currentData(),'displays:1,3')
+  self.assertIsNone(window.controller.process)
+  view.settings_workspace.search.setText('количество');self.assertGreaterEqual(view.settings_workspace.results.count(),1)
+  view.close()
  def test_preferences_reject_credentials_and_keep_data_local(self):
   preferences.save_preferences(room_gesture_camera=2,gemini_api_key='do-not-store',fish_api_key='do-not-store')
   path=self.root/'config/preferences.json'

@@ -505,16 +505,29 @@ QSlider::groove:horizontal{{height:6px;background:#163d49;border-radius:3px;}} Q
    from core.room_pointer_area_picker import pick_pointer_area
    pick_pointer_area(self)
   area_button.clicked.connect(choose_area)
-  display_choice=QComboBox();display_choice.setAccessibleName('Экраны для прямого наведения');display_choice.addItem('Все экраны · единый рабочий стол','all');display_choice.addItem('Экран, на котором находится курсор','current')
-  options=display_options()
-  for key,title,geometry in options:display_choice.addItem(title,key)
-  selected=display_choice.findData(self.bindings['mouse_display'])
-  if selected<0:display_choice.addItem('Выбранный экран отключён · пока все экраны',self.bindings['mouse_display']);selected=display_choice.count()-1
-  display_choice.setCurrentIndex(selected);box.addWidget(display_choice);self.mouse_display=display_choice
-  display_note=QLabel('Только системное прямое наведение. Мышь в браузере остаётся внутри выбранной страницы.'+(' Слева направо: '+'; '.join(item[1] for item in options)+'.' if options else ''));display_note.setWordWrap(True);box.addWidget(display_note)
+  display_choice=QComboBox();display_choice.setAccessibleName('Экраны для прямого наведения');box.addWidget(display_choice);self.mouse_display=display_choice
+  displays_button=QPushButton('Выбрать количество и экраны…');displays_button.setMinimumHeight(42);displays_button.setAccessibleName('Выбрать количество экранов');box.addWidget(displays_button);self.mouse_displays_button=displays_button
+  display_note=QLabel();display_note.setWordWrap(True);box.addWidget(display_note)
+  def populate_displays():
+   from core.room_pointer_area import selected_display_ids
+   target=self.bindings['mouse_display'];options=display_options();ids=selected_display_ids(target)
+   display_choice.blockSignals(True);display_choice.clear();display_choice.addItem('Автоматически · все подключённые экраны','all');display_choice.addItem('Экран, на котором находится курсор','current')
+   for key,title,geometry in options:display_choice.addItem(title,key)
+   selected=display_choice.findData(target)
+   if selected<0:
+    active=sum(int(key[8:]) in ids for key,_,_ in options)
+    display_choice.addItem(f'Выбранные экраны · {len(ids)} (подключено {active})',target);selected=display_choice.count()-1
+   display_choice.setCurrentIndex(selected);display_choice.blockSignals(False)
+   display_note.setText(f'Подключено экранов: {len(options)}. Количество определяется автоматически. '+('Слева направо: '+'; '.join(item[1] for item in options)+'. ' if options else '')+'Выбор экранов применяется к системному прямому наведению; мышь в браузере остаётся внутри страницы.')
   def display_changed():
    config=read_settings(path);config['mouse_display']=display_choice.currentData();self.bindings['mouse_display']=config['mouse_display'];save_settings(path,config);self.controller.reload_rules()
-  display_choice.currentIndexChanged.connect(display_changed)
+  def choose_displays():
+   from core.room_display_picker import DisplayPicker
+   dialog=DisplayPicker(self,self.bindings['mouse_display'])
+   if dialog.exec()==QDialog.DialogCode.Accepted and dialog.selected_keys():
+    config=read_settings(path);config['mouse_display']=dialog.target();save_settings(path,config);self.bindings['mouse_display']=config['mouse_display'];self.controller.reload_rules()
+   populate_displays()
+  populate_displays();display_choice.currentIndexChanged.connect(display_changed);displays_button.clicked.connect(choose_displays)
   mouse_speed=QSlider(Qt.Orientation.Horizontal);mouse_speed.setRange(5,30);mouse_speed.setValue(round(self.bindings.get('mouse_speed',1.5)*10));mouse_speed.setAccessibleName('Скорость мыши рукой');speed_value=QLabel('Скорость курсора · '+str(mouse_speed.value()/10)+' ×');box.addWidget(speed_value);box.addWidget(mouse_speed)
   mouse_acceleration=QCheckBox('Ускорять курсор при быстрых движениях');mouse_acceleration.setChecked(self.bindings.get('mouse_acceleration',False));mouse_acceleration.setToolTip('Выключено по умолчанию. Только относительное наведение. Перетаскивание и прокрутка остаются линейными.');box.addWidget(mouse_acceleration)
   mouse_precision=QCheckBox('Точное наведение на малой скорости');mouse_precision.setChecked(self.bindings.get('mouse_precision',True));mouse_precision.setToolTip('Медленные движения уменьшают чувствительность до 30%. При обычном движении возвращается выбранная скорость. Отдельно от ускорения; перетаскивание и прокрутка не меняются.');box.addWidget(mouse_precision)
@@ -551,7 +564,7 @@ QSlider::groove:horizontal{{height:6px;background:#163d49;border-radius:3px;}} Q
    self.bindings=settings();swap.blockSignals(True);swap.setChecked(False);swap.blockSignals(False)
    for control,update in [(hand_choice,lambda:hand_choice.setCurrentIndex(0)),(positioning,lambda:positioning.setCurrentIndex(0)),(mouse_speed,lambda:mouse_speed.setValue(15)),(mouse_acceleration,lambda:mouse_acceleration.setChecked(False)),(mouse_precision,lambda:mouse_precision.setChecked(True)),(two_hand_zoom,lambda:two_hand_zoom.setChecked(True)),(pair_step,lambda:pair_step.setValue(12)),(display_choice,lambda:display_choice.setCurrentIndex(0))]:
     control.blockSignals(True);update();control.blockSignals(False)
-   update_area_summary()
+   update_area_summary();populate_displays()
    speed_value.setText('Скорость курсора · 1.5 ×')
    pair_value.setText('Изменение расстояния на один шаг масштаба · 12%')
    self.mode_combo.blockSignals(True);self.mode_combo.setCurrentIndex(0);self.mode_combo.blockSignals(False)

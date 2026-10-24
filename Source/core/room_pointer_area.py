@@ -25,9 +25,22 @@ def map_point(point, area):
 def display_target(value):
     if value in ('all', 'current'):
         return value
-    if isinstance(value, str) and value.startswith('display:') and value[8:].isdigit() and len(value) < 24:
-        return value
+    if isinstance(value, str) and value.startswith('display:') and value[8:].isascii() and value[8:].isdigit() and len(value) < 24 and 0 < int(value[8:]) <= 0xffffffff:
+        return 'display:' + str(int(value[8:]))
+    if isinstance(value, str) and value.startswith('displays:') and len(value) < 400:
+        parts = value[9:].split(',')
+        if 1 <= len(parts) <= 32 and all(p.isascii() and p.isdigit() and 0 < int(p) <= 0xffffffff for p in parts):
+            return 'displays:' + ','.join(str(i) for i in sorted({int(p) for p in parts}))
     return 'all'
+
+
+def selected_display_ids(value):
+    value = display_target(value)
+    if value.startswith('display:'):
+        return {int(value[8:])}
+    if value.startswith('displays:'):
+        return {int(p) for p in value[9:].split(',')}
+    return set()
 
 
 def absolute_desktop_point(xy, rectangles):

@@ -54,13 +54,14 @@ class NativeAirMouse:
   xy=(data['relative_x'],data['relative_y']) if not data.get('absolute') and 'relative_x' in data else (data['x'],data['y']);phase=data['phase']
   if self.previous is None:self.location=point
   if self.previous is not None or data.get('absolute'):
-   _,displays,_=q.CGGetActiveDisplayList(16,None,None)
+   _,displays,_=q.CGGetActiveDisplayList(32,None,None)
    bounds=next((q.CGDisplayBounds(d) for d in displays if q.CGRectContainsPoint(q.CGDisplayBounds(d),self.location)),q.CGDisplayBounds(q.CGMainDisplayID()))
    if data.get('absolute'):
-    from core.room_pointer_area import absolute_desktop_point
+    from core.room_pointer_area import absolute_desktop_point,selected_display_ids
     target=getattr(self,'display_target','all')
+    ids=selected_display_ids(target)
     selected=([bounds] if target=='current' else
-              [q.CGDisplayBounds(d) for d in displays if target==f'display:{d}'] if target.startswith('display:') else
+              [q.CGDisplayBounds(d) for d in displays if d in ids] if ids else
               [q.CGDisplayBounds(d) for d in displays]) or [q.CGDisplayBounds(d) for d in displays] or [bounds]
     self.location=absolute_desktop_point(xy,selected);dx=dy=0.
    else:
@@ -68,7 +69,7 @@ class NativeAirMouse:
     # must not suddenly change the cursor's speed.
     if self.scale is None:self.scale=(bounds.size.width,bounds.size.height)
     dx=(xy[0]-self.previous[0])*self.scale[0];dy=(xy[1]-self.previous[1])*self.scale[1]
-   rectangles=[q.CGDisplayBounds(d) for d in displays] or [bounds]
+   rectangles=selected if data.get('absolute') else [q.CGDisplayBounds(d) for d in displays] or [bounds]
    self.location=reachable_point((self.location[0]+dx,self.location[1]+dy),rectangles)
   self.previous=xy
   def post(kind,button=q.kCGMouseButtonLeft,count=1):

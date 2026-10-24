@@ -1,5 +1,11 @@
 # Changes
 
+## 1.3.2 — 2026-10-24
+
+- Added a screen-count and monitor selection dialog: choose one or several attached displays, or automatically use all connected monitors. The list follows detected hardware instead of assuming two displays. Refresh handles connection changes without saving until confirmed.
+- Saved subsets keep their exact monitors when new ones are attached. Absolute pointer mapping excludes unselected monitors, including gaps containing another display.
+- Added isolated Qt checks for 0/1/2/3/8/32 monitors, count and checkbox synchronization, connection changes, settings roundtrips and fake native output.
+
 ## 1.3.1 — 2026-10-24
 
 - Added a live, mirrored camera-area picker for absolute pointing. Draw, resize or move the rectangle; normalized bounds survive window resizing and are saved locally. Relative pointing retains its existing behavior.
