@@ -1,5 +1,9 @@
 # Changes
 
+## 1.3.3 — 2026-10-24
+
+- Redrew the hand icon with four raised fingers and a single thumb; removed the extra side protrusion. The same vector generates the application and macOS bundle icons.
+
 ## 1.3.2 — 2026-10-24
 
 - Added a screen-count and monitor selection dialog: choose one or several attached displays, or automatically use all connected monitors. The list follows detected hardware instead of assuming two displays. Refresh handles connection changes without saving until confirmed.

@@ -19,7 +19,7 @@ from core.room_gesture_panel import install_controller,open_panel
 from core.room_settings_shell import STYLE
 
 ROOT=Path(__file__).resolve().parents[1]
-APP_VERSION='1.3.2'
+APP_VERSION='1.3.3'
 
 class Preview(QLabel):
     def __init__(self):
