@@ -1,5 +1,11 @@
 # Changes
 
+## 1.2.1 — 2026-10-24
+
+- Added an adaptive positional tether after coordinate smoothing to suppress stationary hand-landmark jitter without rounding away every small movement.
+- Added independent low-speed precision aiming, enabled by default: sensitivity falls to 30% for fine adjustments and returns to normal during ordinary movement. Fast acceleration retains its existing separate setting and remains off by default.
+- Dragging, scrolling, absolute aiming and joystick behavior are unchanged. Added noisy stationary/slow-stroke and settings regression checks using synthetic landmarks and fake input only.
+
 ## 1.2.0 — 2026-10-23
 
 - Added explicit selection and local CSRT tracking of an ordinary pen tip/cap without markers; no hand inference is performed while this source is selected.

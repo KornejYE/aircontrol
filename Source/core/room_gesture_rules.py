@@ -33,6 +33,7 @@ def settings(value=None):
   'mouse_return_mode':'analog' if value.get('mouse_return_mode')=='analog' else 'discrete',
   'mouse_position':'absolute' if value.get('mouse_position')=='absolute' else 'relative',
   'mouse_acceleration':value.get('mouse_acceleration') is True,
+  'mouse_precision':value.get('mouse_precision',True) is not False,
   'mouse_speed':max(.5,min(3.,value.get('mouse_speed',1.5))) if type(value.get('mouse_speed',1.5)) in (int,float) and math.isfinite(value.get('mouse_speed',1.5)) else 1.5,
  'mouse_hand':'Left' if value.get('mouse_hand')=='Left' else 'Right',
  'analog_span':max(.12,min(.60,span)),
@@ -167,7 +168,7 @@ class HandRules:
     p=[(float(v.x),float(v.y)) if hasattr(v,'x') else (float(v[0]),float(v[1])) for v in landmarks] if landmarks is not None and allow_actions else None
     norm,flags=poses(p) if p is not None else (.2,{})
    except (ValueError,TypeError,IndexError,AttributeError):p=None;norm=.2;flags={};hard_cancel=True
-   packets=(self.mouse.cancel() if hard_cancel else self.mouse.update(p,now,speed=self.config['mouse_speed'],flags=flags,norm=norm,positioning=self.config['mouse_position'],acceleration=self.config['mouse_acceleration']))
+   packets=(self.mouse.cancel() if hard_cancel else self.mouse.update(p,now,speed=self.config['mouse_speed'],flags=flags,norm=norm,positioning=self.config['mouse_position'],acceleration=self.config['mouse_acceleration'],precision=self.config['mouse_precision']))
    if self.config['mode']=='system_mouse' and self.config['mouse_position']=='relative' and any(packet['phase']=='cancel' for packet in packets):self.mouse.xy=[.5,.5]
    labels={'point':'Курсор','pinch':'Щипок · клик / перетаскивание','scroll':'Прокрутка двумя пальцами','scroll_grab':'Прокрутка захватом трёх пальцев','context':'Контекстное меню','fist':'Кулак — курсор заморожен'}
    self.feedback=dict(side='Правая' if hand=='Right' else 'Левая',grip=self.mouse.pose not in (None,'idle','fist'),phase=labels.get(self.mouse.pose,'Мышь рукой · рука не видна'))

@@ -475,18 +475,19 @@ QSlider::groove:horizontal{{height:6px;background:#163d49;border-radius:3px;}} Q
    self.controller.set_mode(self.mode_combo.currentData());self.bindings=read_settings(path)
    self.refresh()
   self.mode_combo.currentIndexChanged.connect(mode_changed)
-  box=card('Мышь рукой','Положение кисти управляет курсором. Скорость постоянная, пока вы сами не включите ускорение.')
+  box=card('Мышь рукой','Неподвижная кисть удерживает курсор. Медленные движения позволяют точнее наводиться на маленькие кнопки.')
   pointer_note=QLabel('Мышь рукой: указательный — курсор; большой + указательный — клик или выделение. Сведите большой, указательный и средний и ведите кисть вверх/вниз, чтобы прокручивать как пальцем по экрану. Два вытянутых пальца тоже прокручивают. Большой и средний вместе, указательный вытянут — правый клик. Кулак отпускает кнопку; Esc останавливает. Ускорение выключено по умолчанию; его можно включить флажком «Ускорять курсор». Если расширение активно, выбирайте режим в его меню ⋯.');pointer_note.setWordWrap(True);box.addWidget(pointer_note)
   hand_choice=QComboBox();hand_choice.setAccessibleName('Управляющая рука для мыши');hand_choice.addItem('Мышь · правая рука','Right');hand_choice.addItem('Мышь · левая рука','Left');hand_choice.setCurrentIndex(hand_choice.findData(self.bindings.get('mouse_hand','Right')));box.addWidget(hand_choice)
   positioning=QComboBox();positioning.setAccessibleName('Способ позиционирования мыши рукой');positioning.addItem('Как тачпад · относительное движение','relative');positioning.addItem('Как указатель · прямое наведение','absolute');positioning.setCurrentIndex(positioning.findData(self.bindings.get('mouse_position','relative')));box.addWidget(positioning)
   mouse_speed=QSlider(Qt.Orientation.Horizontal);mouse_speed.setRange(5,30);mouse_speed.setValue(round(self.bindings.get('mouse_speed',1.5)*10));mouse_speed.setAccessibleName('Скорость мыши рукой');speed_value=QLabel('Скорость курсора · '+str(mouse_speed.value()/10)+' ×');box.addWidget(speed_value);box.addWidget(mouse_speed)
   mouse_acceleration=QCheckBox('Ускорять курсор при быстрых движениях');mouse_acceleration.setChecked(self.bindings.get('mouse_acceleration',False));mouse_acceleration.setToolTip('Выключено по умолчанию. Только относительное наведение. Перетаскивание и прокрутка остаются линейными.');box.addWidget(mouse_acceleration)
-  self.mouse_hand=hand_choice;self.mouse_position=positioning;self.mouse_speed=mouse_speed;self.mouse_acceleration=mouse_acceleration
+  mouse_precision=QCheckBox('Точное наведение на малой скорости');mouse_precision.setChecked(self.bindings.get('mouse_precision',True));mouse_precision.setToolTip('Медленные движения уменьшают чувствительность до 30%. При обычном движении возвращается выбранная скорость. Отдельно от ускорения; перетаскивание и прокрутка не меняются.');box.addWidget(mouse_precision)
+  self.mouse_hand=hand_choice;self.mouse_position=positioning;self.mouse_speed=mouse_speed;self.mouse_acceleration=mouse_acceleration;self.mouse_precision=mouse_precision
   box.removeWidget(pointer_note);box.addWidget(pointer_note)
   def pointer_settings():
    speed_value.setText('Скорость курсора · '+str(mouse_speed.value()/10)+' ×')
-   config=read_settings(path);config['mouse_hand']=hand_choice.currentData();config['mouse_speed']=mouse_speed.value()/10;config['mouse_position']=positioning.currentData();config['mouse_acceleration']=mouse_acceleration.isChecked();self.bindings.update(mouse_hand=config['mouse_hand'],mouse_speed=config['mouse_speed'],mouse_position=config['mouse_position'],mouse_acceleration=config['mouse_acceleration']);save_settings(path,config);self.controller.reload_rules()
-  positioning.currentIndexChanged.connect(pointer_settings);hand_choice.currentIndexChanged.connect(pointer_settings);mouse_speed.valueChanged.connect(pointer_settings);mouse_acceleration.toggled.connect(pointer_settings)
+   config=read_settings(path);config['mouse_hand']=hand_choice.currentData();config['mouse_speed']=mouse_speed.value()/10;config['mouse_position']=positioning.currentData();config['mouse_acceleration']=mouse_acceleration.isChecked();config['mouse_precision']=mouse_precision.isChecked();self.bindings.update(mouse_hand=config['mouse_hand'],mouse_speed=config['mouse_speed'],mouse_position=config['mouse_position'],mouse_acceleration=config['mouse_acceleration'],mouse_precision=config['mouse_precision']);save_settings(path,config);self.controller.reload_rules()
+  positioning.currentIndexChanged.connect(pointer_settings);hand_choice.currentIndexChanged.connect(pointer_settings);mouse_speed.valueChanged.connect(pointer_settings);mouse_acceleration.toggled.connect(pointer_settings);mouse_precision.toggled.connect(pointer_settings)
 
   box=card('Назначения жестов','Выберите руку и назначьте действие. Поиск сверху находит любой жест и открывает нужную строку.');self.bindings_card=box.parentWidget()
   swap=QCheckBox('Поменять левую и правую руку местами');swap.setChecked(self.bindings['swap_hands']);box.addWidget(swap);self.swap_hands=swap
@@ -505,7 +506,7 @@ QSlider::groove:horizontal{{height:6px;background:#163d49;border-radius:3px;}} Q
    tabs.addTab(page,title)
   def defaults():
    self.bindings=settings();swap.blockSignals(True);swap.setChecked(False);swap.blockSignals(False)
-   for control,update in [(hand_choice,lambda:hand_choice.setCurrentIndex(0)),(positioning,lambda:positioning.setCurrentIndex(0)),(mouse_speed,lambda:mouse_speed.setValue(15)),(mouse_acceleration,lambda:mouse_acceleration.setChecked(False))]:
+   for control,update in [(hand_choice,lambda:hand_choice.setCurrentIndex(0)),(positioning,lambda:positioning.setCurrentIndex(0)),(mouse_speed,lambda:mouse_speed.setValue(15)),(mouse_acceleration,lambda:mouse_acceleration.setChecked(False)),(mouse_precision,lambda:mouse_precision.setChecked(True))]:
     control.blockSignals(True);update();control.blockSignals(False)
    speed_value.setText('Скорость курсора · 1.5 ×')
    self.mode_combo.blockSignals(True);self.mode_combo.setCurrentIndex(0);self.mode_combo.blockSignals(False)

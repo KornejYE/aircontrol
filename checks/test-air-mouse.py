@@ -2,7 +2,7 @@
 import sys,unittest,math,random
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'Source'))
-from core.room_air_mouse import AirMouse,valid_pointer,pointer_gain
+from core.room_air_mouse import AirMouse,valid_pointer,pointer_gain,precision_factor
 from core.room_gesture_rules import HandRules,poses,settings
 from core.room_gesture_relay import Relay
 
@@ -25,6 +25,46 @@ def run(mouse,p,t,**options):
  norm,flags=poses(p) if p is not None else (.2,{})
  return mouse.update(p,t,norm=norm,flags=flags,**options)
 class Mouse(unittest.TestCase):
+ def test_stationary_palm_noise_stays_below_one_pixel_at_common_camera_rates(self):
+  for fps in (15,25,30,60):
+   for acceleration in (False,True):
+    m=AirMouse();rng=random.Random(24);run(m,point(),0,precision=True,acceleration=acceleration);positions=[]
+    for frame in range(1,12*fps+1):
+     p=point()
+     for i in (0,5,9,13,17):p[i]=tuple(a+rng.gauss(0,.001) for a in p[i])
+     run(m,p,frame/fps,precision=True,acceleration=acceleration)
+     if frame>2*fps:positions.append(tuple(a*b for a,b in zip(m.relative,(2560,1440))))
+    for axis in (0,1):self.assertLess(max(p[axis] for p in positions)-min(p[axis] for p in positions),1.)
+ def test_noise_tether_never_creates_a_click_and_keeps_noisy_slow_strokes(self):
+  m=AirMouse();rng=random.Random(24);events=[];run(m,point(),0,precision=True)
+  for frame in range(1,151):
+   p=point(max(0,frame/25-2)*.005)
+   for i in (0,5,9,13,17):p[i]=tuple(a+rng.gauss(0,.001) for a in p[i])
+   events+=run(m,p,frame/25,precision=True)
+   if frame==50:before=m.relative[0]
+  self.assertGreater((m.relative[0]-before)*2560,20.)
+  self.assertFalse(any(p['phase'] in ('click','down','cancel') for p in events))
+ def test_precision_curve_reduces_only_low_speed_and_has_no_normal_speed_penalty(self):
+  self.assertAlmostEqual(precision_factor(0),.3)
+  self.assertEqual(precision_factor(.3),1.)
+  self.assertEqual(precision_factor(3.),1.)
+  values=[precision_factor(i/100) for i in range(40)]
+  self.assertEqual(values,sorted(values))
+  self.assertLess(pointer_gain(1.5,.01,False,True),pointer_gain(1.5,.01,False))
+ def test_precision_setting_is_independent_of_fast_acceleration(self):
+  self.assertTrue(settings()['mouse_precision']);self.assertFalse(settings()['mouse_acceleration'])
+  self.assertFalse(settings({'mouse_precision':False})['mouse_precision'])
+  self.assertTrue(settings({'mouse_acceleration':True,'mouse_precision':True})['mouse_precision'])
+ def test_precision_does_not_change_drag_scroll_or_absolute_input(self):
+  for action in ('drag','scroll','absolute'):
+   def replay(enabled):
+    m=AirMouse();out=[];pose=scroll_grab if action=='scroll' else point
+    opts=dict(precision=enabled,positioning='absolute' if action=='absolute' else 'relative')
+    out+=run(m,pose(),0,**opts)
+    if action=='drag':out+=run(m,pinch(),.1,**opts);out+=run(m,pinch(.04),.22,**opts)
+    for i in range(1,10):out+=run(m,(pinch if action=='drag' else pose)(.04+i*.003,dy=-i*.002),.22+i/30,**opts)
+    return out
+   self.assertEqual(replay(False),replay(True))
  def test_pointer_movement_and_fist_freeze(self):
   m=AirMouse();run(m,point(),0);out=run(m,point(.04),.1)
   self.assertGreater(m.xy[0],.5);self.assertTrue(any(e['phase']=='move' for e in out))

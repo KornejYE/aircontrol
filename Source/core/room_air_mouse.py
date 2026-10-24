@@ -1,9 +1,15 @@
 """Local relative air-mouse state machine. No OS, camera, or network access."""
 import math
+import statistics
+from collections import deque
 POINTER_MODES=('mouse','system_mouse')
 PHASES=('move','click','context','down','up','scroll','cancel')
-def pointer_gain(speed,velocity,accelerated=True):
+def precision_factor(velocity):
+ ramp=max(0.,min(1.,(velocity-.03)/.27))
+ return .30+.70*ramp*ramp*(3-2*ramp)
+def pointer_gain(speed,velocity,accelerated=True,precision=False):
  base=max(.5,min(3.,speed))*1.4
+ if precision:base*=precision_factor(velocity)
  if not accelerated:return base
  ramp=max(0.,min(1.,(velocity-.65)/3.35))
  return base*(1+5*ramp*ramp*(3-2*ramp))
@@ -19,6 +25,37 @@ def accelerated_motion(start,target,filtered,velocity,dt,norm,speed,tau):
   gain=pointer_gain(speed,(velocity+following_velocity)/2)
   motion=[a+d*gain for a,d in zip(motion,delta)];filtered=following;velocity=following_velocity
  return filtered,velocity,motion
+
+class AimHold:
+ """Soft positional tether: estimate noise around a local straight stroke.
+
+ Residuals, rather than total speed, distinguish landmark wobble from a slow
+ consistent movement. Never round per-frame deltas or accumulate a release
+ jump: only travel beyond the tether is emitted.
+ """
+ def __init__(self):self.reset()
+ def reset(self):self.samples=deque(maxlen=24);self.position=None;self.noise=0.
+ def update(self,point,now,norm,filtered=None):
+  if self.position is None:self.position=point
+  dt=now-self.samples[-1][0] if self.samples else 0.
+  self.samples.append((now,point))
+  while len(self.samples)>5 and now-self.samples[0][0]>.24:self.samples.popleft()
+  samples=list(self.samples);innovations=[]
+  for (ta,a),(tb,b),(tc,c) in zip(samples,samples[1:],samples[2:]):
+   fraction=(tb-ta)/(tc-ta) if tc>ta else .5
+   innovations.append(math.dist(b,tuple(x+(y-x)*fraction for x,y in zip(a,c))))
+  # The median of short, local interpolation errors rejects a real turn or
+  # stop. A least-squares residual over the whole stroke would call that noise.
+  residual=statistics.median(innovations) if len(samples)>=5 else 0.
+  prior_noise=self.noise*math.exp(-max(0.,dt)/.5)
+  self.noise=max(residual,prior_noise)
+  target=point if filtered is None else filtered
+  distance=math.dist(target,self.position)
+  # Apply the tether AFTER smoothing. Gating raw points would either let their
+  # noise move the anchor or suppress real slow motion hidden inside that noise.
+  radius=max(norm*.0002,min(norm*.015,self.noise*1.8))
+  if distance>radius:self.position=tuple(a+(b-a)*(1-radius/distance) for a,b in zip(self.position,target))
+  return self.position
 def valid_pointer(data):
  return (data.get('action')=='pointer' and data.get('phase') in PHASES
          and all(type(data.get(k)) in (int,float) and math.isfinite(data[k]) and 0<=data[k]<=1 for k in ('x','y'))
@@ -29,13 +66,16 @@ def valid_pointer(data):
 
 class AirMouse:
  def __init__(self):
+  self.aim_hold=AimHold()
   self.relative=[0.,0.];self.candidate=None;self.candidate_since=0.
   self.velocity=0.;self.scroll_pending=0.;self.scroll_lock=False
-  self.trend=(0.,0.)
+  self.trend=(0.,0.);self.precision_trend=(0.,0.)
   self.missing_since=None;self.diagnostics=dict(missing_frames=0,recoveries=0,tracking_resets=0,time_gaps=0,fist_stops=0)
   self.absolute=False;self.point_ready=False;self.pinch_allowed=False;self.filtered=None;self.xy=[.5,.5];self.last=None;self.last_emit=-1.;self.pose=None;self.previous=None;self.since=0.;self.anchor=None;self.down=False;self.context_fired=False
  def packet(self,phase,**extra):return dict(action='pointer',phase=phase,x=self.xy[0],y=self.xy[1],relative_x=self.relative[0],relative_y=self.relative[1],absolute=self.absolute,**extra)
  def cancel(self):
+  self.aim_hold.reset()
+  self.precision_trend=(0.,0.)
   active=self.pose not in (None,'idle','fist') or self.down
   self.point_ready=False;self.pinch_allowed=False;self.filtered=None;self.down=False;self.pose=None;self.previous=None;self.anchor=None;self.last=None;self.context_fired=False;self.candidate=None;self.velocity=0.;self.trend=(0.,0.);self.scroll_pending=0.;self.scroll_lock=False;self.missing_since=None
   return [self.packet('cancel')] if active else []
@@ -43,6 +83,7 @@ class AirMouse:
   return dict(self.diagnostics,pose=self.pose or 'none',recovering=self.missing_since is not None)
  def missing(self,now):
   self.diagnostics['missing_frames']+=1
+  self.precision_trend=(0.,0.)
   self.point_ready=False;self.pinch_allowed=False;self.velocity=0.
   # Never extrapolate invisible landmarks or keep a mouse button held. Only
   # free aiming/scrolling may bridge a brief detector miss at a fixed position.
@@ -53,7 +94,7 @@ class AirMouse:
   self.scroll_lock=True
   self.last_emit=now
   return [self.packet('scroll',dy=0.) if self.pose in ('scroll','scroll_grab') else self.packet('move')]
- def update(self,p,now,*,speed=1.5,flags=None,norm=.2,positioning='relative',acceleration=False):
+ def update(self,p,now,*,speed=1.5,flags=None,norm=.2,positioning='relative',acceleration=False,precision=False):
   try:
    if not math.isfinite(now):raise ValueError()
    if p is None:return self.missing(now)
@@ -62,7 +103,7 @@ class AirMouse:
    if self.last is not None and not 0<=now-self.last<=(.25 if recovered else .20):
     self.diagnostics['time_gaps']+=1
     packets=self.cancel()
-    return packets+self.update(p,now,speed=speed,flags=flags,norm=norm,positioning=positioning,acceleration=acceleration)
+    return packets+self.update(p,now,speed=speed,flags=flags,norm=norm,positioning=positioning,acceleration=acceleration,precision=precision)
    self.absolute=positioning=='absolute'
    flags=flags or {};norm=max(.025,norm)
    extended=[math.dist(p[t],p[0])>math.dist(p[t-2],p[0])*1.12 for t in (8,12,16,20)]
@@ -101,6 +142,8 @@ class AirMouse:
         else p[8] if self.absolute else tuple(1.8*sum(p[i][a] for i in (5,9,13))/3-.8*p[0][a] for a in (0,1)))
    packets=[];dt=max(.001,min(.2,now-self.last)) if self.last is not None else 1/30;self.last=now
    if pose in ('idle','fist'):
+    self.aim_hold.reset()
+    self.precision_trend=(0.,0.)
     if pose=='fist' and self.pose not in (None,'idle','fist'):self.diagnostics['fist_stops']+=1
     if self.pose not in (None,'idle','fist') or self.down:packets.append(self.packet('cancel',reason=pose))
     self.point_ready=False;self.pinch_allowed=False;self.down=False;self.pose=pose;self.previous=None;self.anchor=None;self.velocity=0.;self.trend=(0.,0.);self.scroll_pending=0.;self.scroll_lock=False;self.missing_since=None;return packets
@@ -114,6 +157,8 @@ class AirMouse:
     # cursor stays fixed; distant returns are still rebased without a jump.
     nearby=self.previous is not None and math.dist(pos,self.previous)<=max(.025,min(.10,norm*.5))
     if pose!=self.pose or not nearby:
+     self.aim_hold.reset()
+     self.precision_trend=(0.,0.)
      self.previous=pos;self.filtered=pos;self.anchor=pos;self.scroll_pending=0.
      if pose==self.pose:
       packets.append(self.packet('scroll',dy=0.) if pose in ('scroll','scroll_grab') else self.packet('move'))
@@ -121,6 +166,9 @@ class AirMouse:
    # A bent/closing finger is still free aiming. Only real contact may clutch
    # the pointer; anticipating a click used to freeze natural relaxed poses.
    if self.pose!=pose:
+    self.aim_hold.reset()
+    self.precision_trend=(0.,0.)
+    if pose=='point' and not self.absolute:self.aim_hold.update(pos,now,norm)
     releasing=self.pose=='pinch'
     if self.pose=='pinch':
      if self.down:packets.append(self.packet('up'));self.down=False
@@ -153,6 +201,19 @@ class AirMouse:
    else:filtered=tuple(a+alpha*(b-a) for a,b in zip(self.filtered or pos,pos))
    dx,dy=filtered[0]-(self.filtered or pos)[0],filtered[1]-(self.filtered or pos)[1]
    self.filtered=filtered
+   precision_speed=0.
+   if pose=='point' and not self.absolute:
+    prior=self.aim_hold.position or filtered
+    stable=self.aim_hold.update(pos,now,norm,filtered)
+    if accelerated is not None:
+     distance2=dx*dx+dy*dy
+     integrated_gain=sum(a*b for a,b in zip(accelerated,(dx,dy)))/distance2 if distance2>1e-18 else pointer_gain(speed,self.velocity)
+     accelerated=tuple((b-a)*integrated_gain for a,b in zip(prior,stable))
+    dx,dy=tuple(b-a for a,b in zip(prior,stable))
+    blend=1-math.exp(-dt/.12)
+    self.precision_trend=tuple(a+blend*(b/dt-a) for a,b in zip(self.precision_trend,(dx,dy)))
+    precision_speed=math.hypot(*self.precision_trend)/norm
+    if accelerated is not None and precision:accelerated=tuple(v*precision_factor(precision_speed) for v in accelerated)
    if pose=='context':
     if not self.context_fired and now-self.since>=.12:packets.append(self.packet('context'));self.context_fired=True
    elif pose in ('scroll','scroll_grab'):
@@ -167,7 +228,7 @@ class AirMouse:
       if now-self.last_emit>=.08:packets.append(self.packet('move'));self.last_emit=now
       return packets
      self.down=True;packets.append(self.packet('down'))
-    gain=pointer_gain(speed,0.,False)
+    gain=pointer_gain(speed,precision_speed,False,precision and pose=='point' and not self.absolute)
     if pose=='point' or self.down:
      step=1/.7 if self.absolute else gain;motion=accelerated if accelerated is not None else (dx*step,dy*step)
      self.xy=([max(0.,min(1.,(v-.15)/.7)) for v in filtered] if self.absolute and pose=='point' else [max(0.,min(1.,self.xy[a]+motion[a])) for a in (0,1)])

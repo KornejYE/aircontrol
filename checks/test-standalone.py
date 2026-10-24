@@ -46,6 +46,10 @@ class Standalone(unittest.TestCase):
   view.mouse_acceleration.setChecked(True)
   saved=json.loads((self.root/'config/gesture-actions.json').read_text())
   self.assertTrue(saved['mouse_acceleration']);self.assertEqual(saved['mouse_speed'],1.5)
+  self.assertTrue(view.mouse_precision.isChecked());view.mouse_precision.setChecked(False)
+  saved=json.loads((self.root/'config/gesture-actions.json').read_text())
+  self.assertFalse(saved['mouse_precision']);self.assertTrue(saved['mouse_acceleration'])
+  view.settings_workspace.search.setText('точное');self.assertGreaterEqual(view.settings_workspace.results.count(),1)
   view.close()
  def test_preferences_reject_credentials_and_keep_data_local(self):
   preferences.save_preferences(room_gesture_camera=2,gemini_api_key='do-not-store',fish_api_key='do-not-store')
